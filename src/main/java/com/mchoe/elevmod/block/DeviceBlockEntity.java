@@ -29,6 +29,16 @@ public class DeviceBlockEntity extends BlockEntity {
     public boolean redstoneLast;
     /** 의장 번호 (종류별 의미는 designKey 참고) */
     public int design;
+    /** 설치 위치 미세 조정 (1/16 블록 단위). offX + = 정면에서 볼 때 오른쪽, offY + = 위 */
+    public int offX, offY;
+    public static final int OFF_LIMIT = 16;
+
+    public void setOffset(int x, int y) {
+        offX = Math.max(-OFF_LIMIT, Math.min(OFF_LIMIT, x));
+        offY = Math.max(-OFF_LIMIT, Math.min(OFF_LIMIT, y));
+        hash = 0;
+        sync();
+    }
     private int hash;
 
     /** 종류별 의장 개수 */
@@ -117,6 +127,7 @@ public class DeviceBlockEntity extends BlockEntity {
                 | (hasUp ? 64 : 0) | (hasDown ? 128 : 0) | (dumbwaiter ? 256 : 0) | (redstoneLast ? 512 : 0);
         t.putInt("fl", flags);
         t.putInt("design", design);
+        t.putInt("offX", offX); t.putInt("offY", offY);
         ListTag l = new ListTag();
         for (String n : names) l.add(StringTag.valueOf(n));
         t.put("names", l);
@@ -137,10 +148,14 @@ public class DeviceBlockEntity extends BlockEntity {
         upLit = (f & 16) != 0; downLit = (f & 32) != 0; hasUp = (f & 64) != 0; hasDown = (f & 128) != 0;
         dumbwaiter = (f & 256) != 0; redstoneLast = (f & 512) != 0;
         design = t.getInt("design");
+        offX = t.getInt("offX"); offY = t.getInt("offY");
         names.clear();
         ListTag l = t.getList("names", Tag.TAG_STRING);
         for (Tag x : l) names.add(x.getAsString());
     }
+
+    @Override
+    public net.minecraft.world.phys.AABB getRenderBoundingBox() { return new net.minecraft.world.phys.AABB(worldPosition).inflate(1.2); }
 
     @Override
     public CompoundTag getUpdateTag() { return saveWithoutMetadata(); }

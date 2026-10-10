@@ -185,6 +185,18 @@ public final class PhotoScenes {
         float ddCop = (float) (x + 0.5 + (-dd.cw / 2 + dd.frontOff - dd.frontW / 2) / 2);
         SHOTS.add(new Shot("57_dd_cop_nobuttons", ddCop, Y0 - 0.15, -0.72, 0, 22, dd.getBlockPos(), 0f, 0));
 
+        // ---- I: 방범창 문 (2칸 폭 중앙개폐) + 두 블록 사이 가운데로 옮긴 층표시기/홀랜턴
+        x += 10;
+        ControllerBlockEntity wn = elevator(l, p, x, 0, 2, 4, 2, 2, false, cc -> {
+            cc.usage = Spec.Usage.PASSENGER; cc.capIdx = 8; cc.doorType = Spec.DoorType.CO; cc.window = true; cc.jamb = Spec.Jamb.WIDE;
+        });
+        device(l, p, wn, ModRegistry.INDICATOR_SEGMENT.get(), x, Y0 + 2, 1);
+        device(l, p, wn, ModRegistry.HALL_BUTTON.get(), x + 2, Y0 + 1, 1);
+        if (l.getBlockEntity(new BlockPos(x, Y0 + 2, 1)) instanceof DeviceBlockEntity de) de.setOffset(8, 2);   // 정면에서 오른쪽으로 ½ = 두 블록 사이
+        SHOTS.add(new Shot("60_window_hall_closed", x + 1.0, Y0, 4.2, 180, 6, wn.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("61_window_car_closed", x + 1.0, Y0, -wn.cd + 0.3, 0, 6, wn.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("62_window_close", x + 0.75, Y0 - 0.1, 1.9, 180, 0, wn.getBlockPos(), 0f, 0));
+
         // ---- H: 승강장 장치 의장 진열 (디자인 변경기로 바꿀 수 있는 것들)
         for (int xx = -22; xx <= 0; xx++) for (int y = Y0; y <= Y0 + 3; y++) set(l, xx, y, 32, Blocks.SMOOTH_QUARTZ.defaultBlockState());
         for (int xx = -24; xx <= 2; xx++) for (int z = 33; z <= 39; z++) set(l, xx, Y0 - 1, z, Blocks.POLISHED_ANDESITE.defaultBlockState());

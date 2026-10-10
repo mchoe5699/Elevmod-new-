@@ -38,6 +38,13 @@ public class DesignToolItem extends Item {
         if (p == null) return InteractionResult.PASS;
         BlockEntity be = level.getBlockEntity(ctx.getClickedPos());
         if (!(be instanceof DeviceBlockEntity) && !(be instanceof LandingDoorBlockEntity)) return InteractionResult.PASS;
+        if (positionMode(ctx.getItemInHand())) {
+            // 위치 조정 모드: 장치를 우클릭하면 위치 조정 화면
+            if (be instanceof DeviceBlockEntity && level.isClientSide)
+                net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,
+                        () -> () -> com.mchoe.elevmod.client.ClientHooks.openOffset(ctx.getClickedPos()));
+            return InteractionResult.SUCCESS;
+        }
         if (level.isClientSide) return InteractionResult.SUCCESS;
         int d = p.isShiftKeyDown() ? -1 : 1;
         Component msg = null;
@@ -65,8 +72,28 @@ public class DesignToolItem extends Item {
         return InteractionResult.SUCCESS;
     }
 
+    public static boolean positionMode(ItemStack st) { return st.getTag() != null && st.getTag().getBoolean("pos"); }
+
+    /** 허공에 웅크리고 우클릭: 디자인 모드 ↔ 위치 조정 모드 */
+    @Override
+    public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level, Player p, net.minecraft.world.InteractionHand hand) {
+        ItemStack st = p.getItemInHand(hand);
+        if (!p.isShiftKeyDown()) return net.minecraft.world.InteractionResultHolder.pass(st);
+        if (!level.isClientSide) {
+            boolean pos = !positionMode(st);
+            st.getOrCreateTag().putBoolean("pos", pos);
+            p.displayClientMessage(Component.translatable(pos ? "elevmod.design_tool.mode_pos" : "elevmod.design_tool.mode_design").withStyle(ChatFormatting.AQUA), true);
+        }
+        return net.minecraft.world.InteractionResultHolder.sidedSuccess(st, level.isClientSide);
+    }
+
+    @Override
+    public boolean isFoil(ItemStack st) { return positionMode(st); }
+
     @Override
     public void appendHoverText(ItemStack st, @Nullable Level level, List<Component> lines, TooltipFlag flag) {
+        lines.add(Component.translatable(positionMode(st) ? "elevmod.design_tool.mode_pos" : "elevmod.design_tool.mode_design").withStyle(ChatFormatting.AQUA));
+        lines.add(Component.translatable("item.elevmod.design_tool.tip3").withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("item.elevmod.design_tool.tip").withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("item.elevmod.design_tool.tip2").withStyle(ChatFormatting.GRAY));
     }

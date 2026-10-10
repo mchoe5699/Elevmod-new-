@@ -393,5 +393,12 @@
   "elevmod.tenkey.input": "입력",
   "elevmod.tenkey.reserved": "예약층",
   "elevmod.tenkey.hint": "숫자를 차례로(15층=1,5), 지하는 B 먼저. 등록 또는 2초 후 자동 등록. 등록된 층을 다시 입력하면 취소",
-  "elevmod.info.design_hint": "디자인 변경기로 카 안/승강장 장치를 직접 우클릭해도 바뀝니다."
+  "elevmod.info.design_hint": "디자인 변경기로 카 안/승강장 장치를 직접 우클릭해도 바뀝니다.",
+  "elevmod.screen.offset": "장치 위치 조정",
+  "elevmod.offset.reset": "원위치",
+  "elevmod.offset.value": "가로 %s  /  세로 %s  (블록)",
+  "elevmod.offset.hint": "◀▶▲▼ = 1/16칸, ½ = 반 칸. 짝수 칸 출입구 위 표시기는 ½ 이동으로 두 블록 사이 가운데에 둘 수 있습니다.",
+  "elevmod.design_tool.mode_design": "모드: 디자인 변경",
+  "elevmod.design_tool.mode_pos": "모드: 위치 조정",
+  "item.elevmod.design_tool.tip3": "허공에 웅크리고 우클릭: 디자인 ↔ 위치 조정 모드 전환"
 }

@@ -31,9 +31,14 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
         ps.pushPose();
         ps.translate(0.5, 0, 0.5);
         ps.mulPose(Axis.YP.rotationDegrees(-f.toYRot()));
+        ps.translate(d.offX / 16f, d.offY / 16f, 0);
         float z = -0.5f + (float) k.depth / 16f + 0.0015f;
         float hw = (float) (k.x2 - k.x1) / 32f;
         float y1 = (float) k.y1 / 16f, y2 = (float) k.y2 / 16f;
+        // 판(본체)
+        String plateTex = k == DeviceBlock.Kind.FIRE_SWITCH ? "fire_switch"
+                : k == DeviceBlock.Kind.IND_SEGMENT || k == DeviceBlock.Kind.IND_DOT ? "plate_black" : "plate_stainless";
+        RenderUtil.panel(ps, RenderUtil.solid(buf, plateTex), -hw, y1, -0.5f, hw, y2, -0.5f + (float) k.depth / 16f, light, WHITE);
         float cy = (y1 + y2) / 2;
         long time = Minecraft.getInstance().level == null ? 0 : Minecraft.getInstance().level.getGameTime();
         String arrow = RenderUtil.arrow(d.dir);

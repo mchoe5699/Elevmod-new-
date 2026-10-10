@@ -84,9 +84,10 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
             ps.pushPose();
             ps.translate(x1, 0, 0.42f);
             ps.mulPose(Axis.YP.rotationDegrees(-90 * p));
-            RenderUtil.panel(ps, vc, 0, 0, -0.045f, cw, chh, 0, light, WHITE);
+            float[] sw = glass ? null : RenderUtil.windowRect(be.window, 0, cw, 0, chh);
+            if (sw == null) RenderUtil.panel(ps, vc, 0, 0, -0.045f, cw, chh, 0, light, WHITE);
+            else RenderUtil.panelWindow(ps, buf, vc, 0, 0, -0.045f, cw, chh, 0, sw[0], sw[1], sw[2], sw[3], light, WHITE);
             RenderUtil.fill(ps, buf, cw - 0.12f, 0.95f, 0, cw - 0.08f, 1.08f, 0.05f, light, 0xFF303030);
-            if (be.window && chh >= 1.8f) RenderUtil.fill(ps, buf, cw / 2 - 0.1f, 1.2f, 0.001f, cw / 2 + 0.1f, 1.6f, 0.004f, light, 0xFF1C2833);
             ps.popPose();
         } else {
             boolean mirror = be.rightHand && t.sideOpening();
@@ -96,11 +97,9 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
                 float px1 = x1 + a1, px2 = x1 + a2;
                 float z1 = PANEL_Z0 + r[4] * PANEL_STEP, z2 = z1 + PANEL_T;
                 if (r[5] == 1) { RenderUtil.fill(ps, buf, px1, r[2], z1, px2, r[3], z2, light, 0xFF6E7378); continue; }
-                RenderUtil.panel(ps, vc, px1, r[2], z1, px2, r[3], z2, light, WHITE);
-                if (be.window && r[3] - r[2] > 1.5f && px2 - px1 > 0.25f) {
-                    float cx = (px1 + px2) / 2;
-                    RenderUtil.fill(ps, buf, cx - 0.06f, 1.2f, z2, cx + 0.06f, 1.55f, z2 + 0.003f, light, 0xFF1C2833);
-                }
+                float[] win = glass ? null : RenderUtil.windowRect(be.window, px1, px2, r[2], r[3]);
+                if (win == null) RenderUtil.panel(ps, vc, px1, r[2], z1, px2, r[3], z2, light, WHITE);
+                else RenderUtil.panelWindow(ps, buf, vc, px1, r[2], z1, px2, r[3], z2, win[0], win[1], win[2], win[3], light, WHITE);
             }
         }
         ps.popPose();

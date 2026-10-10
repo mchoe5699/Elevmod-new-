@@ -37,6 +37,8 @@ public final class Net {
                 .encoder(EditMsg::encode).decoder(EditMsg::decode).consumerMainThread(EditMsg::handle).add();
         CH.messageBuilder(DestCallMsg.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(DestCallMsg::encode).decoder(DestCallMsg::decode).consumerMainThread(DestCallMsg::handle).add();
+        CH.messageBuilder(OffsetMsg.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(OffsetMsg::encode).decoder(OffsetMsg::decode).consumerMainThread(OffsetMsg::handle).add();
         CH.messageBuilder(ScreenMsg.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(ScreenMsg::encode).decoder(ScreenMsg::decode).consumerMainThread(ScreenMsg::handle).add();
     }
@@ -94,6 +96,21 @@ public final class Net {
             if (p.level().getBlockEntity(panel) instanceof DeviceBlockEntity d && d.ctrl != null
                     && p.level().getBlockEntity(d.ctrl) instanceof ControllerBlockEntity c) {
                 c.destinationCall((ServerLevel) p.level(), d.floorY, toY, p);
+            }
+        }
+    }
+
+    /** 승강장 장치 위치 조정 (1/16 블록 단위) */
+    public record OffsetMsg(BlockPos pos, int dx, int dy, boolean reset) {
+        public void encode(FriendlyByteBuf b) { b.writeBlockPos(pos); b.writeVarInt(dx); b.writeVarInt(dy); b.writeBoolean(reset); }
+        public static OffsetMsg decode(FriendlyByteBuf b) { return new OffsetMsg(b.readBlockPos(), b.readVarInt(), b.readVarInt(), b.readBoolean()); }
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer p = ctx.get().getSender();
+            if (p == null || !p.level().isLoaded(pos)) return;
+            if (p.position().distanceTo(Vec3.atCenterOf(pos)) > 10) return;
+            if (p.level().getBlockEntity(pos) instanceof DeviceBlockEntity d) {
+                if (reset) d.setOffset(0, 0);
+                else d.setOffset(d.offX + dx, d.offY + dy);
             }
         }
     }

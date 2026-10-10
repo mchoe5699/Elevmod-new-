@@ -70,11 +70,18 @@ public class DeviceBlock extends BaseEntityBlock {
     }
 
     @Override
-    public RenderShape getRenderShape(BlockState s) { return RenderShape.MODEL; }
+    public RenderShape getRenderShape(BlockState s) { return RenderShape.ENTITYBLOCK_ANIMATED; } // 판은 블록엔티티 렌더러가 위치 조정값을 반영해 그림
+
+    @Override
+    public boolean hasDynamicShape() { return true; }
 
     @Override
     public VoxelShape getShape(BlockState s, BlockGetter g, BlockPos p, CollisionContext c) {
-        return Shapes2.wall(s.getValue(FACING), kind.x1, kind.y1, kind.x2, kind.y2, kind.depth);
+        int ox = 0, oy = 0;
+        if (g.getBlockEntity(p) instanceof DeviceBlockEntity d) { ox = d.offX; oy = d.offY; }
+        // 모델 좌표계(앞면이 북쪽)에서 x 증가 = 정면에서 볼 때 왼쪽 → 오른쪽 이동은 x 감소
+        double y1 = Math.max(-16, kind.y1 + oy), y2 = Math.min(32, kind.y2 + oy);
+        return Shapes2.wall(s.getValue(FACING), kind.x1 - ox, y1, kind.x2 - ox, y2, kind.depth);
     }
 
     @Nullable
@@ -102,7 +109,7 @@ public class DeviceBlock extends BaseEntityBlock {
         }
         switch (kind) {
             case HALL_BUTTON, HALL_PANEL -> {
-                double ly = hit.getLocation().y - pos.getY();
+                double ly = hit.getLocation().y - pos.getY() - d.offY / 16.0;
                 double split = kind == Kind.HALL_PANEL ? 0.175 : 0.245;
                 boolean up = ly >= split;
                 if (!d.hasUp) up = false;

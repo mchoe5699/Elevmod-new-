@@ -22,6 +22,10 @@ public final class ClientHooks {
         }
     }
 
+    public static void openOffset(BlockPos pos) {
+        Minecraft.getInstance().setScreen(new com.mchoe.elevmod.client.screen.DeviceOffsetScreen(pos));
+    }
+
     public static void openCop(ElevatorCarEntity car, boolean accessible) {
         Minecraft.getInstance().setScreen(new CopScreen(car, accessible));
     }

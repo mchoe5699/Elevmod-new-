@@ -102,6 +102,54 @@ public final class RenderUtil {
         v(vc, m, n, x2, y2, z2, 0, 0, 1, 0, 0, light, c); v(vc, m, n, x2, y1, z2, 0, 1, 1, 0, 0, light, c);
     }
 
+    /**
+     * 방범창(투명 유리창)이 뚫린 문짝: 텍스처를 한 장으로 늘여 붙인 상자에서 (wx1,wy1)-(wx2,wy2) 구멍을 뺀 모양.
+     * 구멍 안쪽 면(창틀)과 고무 개스킷, 투명 유리까지 그린다.
+     */
+    public static void panelWindow(PoseStack ps, MultiBufferSource buf, VertexConsumer vc, float x1, float y1, float z1, float x2, float y2, float z2,
+                                   float wx1, float wy1, float wx2, float wy2, int light, int c) {
+        Matrix4f m = ps.last().pose();
+        Matrix3f n = ps.last().normal();
+        float W = x2 - x1, H = y2 - y1;
+        // 앞(+Z)·뒤(-Z) 면: 창 둘레 4조각
+        float[][] parts = {{x1, y1, x2, wy1}, {x1, wy2, x2, y2}, {x1, wy1, wx1, wy2}, {wx2, wy1, x2, wy2}};
+        for (float[] q : parts) {
+            if (q[2] - q[0] <= 0 || q[3] - q[1] <= 0) continue;
+            float ua = (q[0] - x1) / W, ub = (q[2] - x1) / W, va = (y2 - q[1]) / H, vb = (y2 - q[3]) / H;
+            v(vc, m, n, q[0], q[1], z2, ua, va, 0, 0, 1, light, c); v(vc, m, n, q[2], q[1], z2, ub, va, 0, 0, 1, light, c);
+            v(vc, m, n, q[2], q[3], z2, ub, vb, 0, 0, 1, light, c); v(vc, m, n, q[0], q[3], z2, ua, vb, 0, 0, 1, light, c);
+            float ra = (x2 - q[0]) / W, rb = (x2 - q[2]) / W;
+            v(vc, m, n, q[0], q[1], z1, ra, va, 0, 0, -1, light, c); v(vc, m, n, q[0], q[3], z1, ra, vb, 0, 0, -1, light, c);
+            v(vc, m, n, q[2], q[3], z1, rb, vb, 0, 0, -1, light, c); v(vc, m, n, q[2], q[1], z1, rb, va, 0, 0, -1, light, c);
+        }
+        // 바깥 테두리 면 (위/아래/좌/우)
+        v(vc, m, n, x1, y2, z1, 0, 0, 0, 1, 0, light, c); v(vc, m, n, x1, y2, z2, 0, 1, 0, 1, 0, light, c);
+        v(vc, m, n, x2, y2, z2, 1, 1, 0, 1, 0, light, c); v(vc, m, n, x2, y2, z1, 1, 0, 0, 1, 0, light, c);
+        v(vc, m, n, x1, y1, z1, 0, 0, 0, -1, 0, light, c); v(vc, m, n, x2, y1, z1, 1, 0, 0, -1, 0, light, c);
+        v(vc, m, n, x2, y1, z2, 1, 1, 0, -1, 0, light, c); v(vc, m, n, x1, y1, z2, 0, 1, 0, -1, 0, light, c);
+        v(vc, m, n, x1, y1, z1, 0, 1, -1, 0, 0, light, c); v(vc, m, n, x1, y1, z2, 1, 1, -1, 0, 0, light, c);
+        v(vc, m, n, x1, y2, z2, 1, 0, -1, 0, 0, light, c); v(vc, m, n, x1, y2, z1, 0, 0, -1, 0, 0, light, c);
+        v(vc, m, n, x2, y1, z1, 1, 1, 1, 0, 0, light, c); v(vc, m, n, x2, y2, z1, 1, 0, 1, 0, 0, light, c);
+        v(vc, m, n, x2, y2, z2, 0, 0, 1, 0, 0, light, c); v(vc, m, n, x2, y1, z2, 0, 1, 1, 0, 0, light, c);
+        // 창틀(구멍 안쪽 면) – 어두운 고무 개스킷 색
+        int g = 0xFF1E2024;
+        fill(ps, buf, wx1 - 0.008f, wy1 - 0.008f, z1 - 0.0015f, wx2 + 0.008f, wy1, z2 + 0.0015f, light, g);
+        fill(ps, buf, wx1 - 0.008f, wy2, z1 - 0.0015f, wx2 + 0.008f, wy2 + 0.008f, z2 + 0.0015f, light, g);
+        fill(ps, buf, wx1 - 0.008f, wy1, z1 - 0.0015f, wx1, wy2, z2 + 0.0015f, light, g);
+        fill(ps, buf, wx2, wy1, z1 - 0.0015f, wx2 + 0.008f, wy2, z2 + 0.0015f, light, g);
+        // 투명 유리 (양면에서 보임)
+        quadZ(ps, glass(buf, "window_glass"), wx1, wy1, wx2, wy2, (z1 + z2) / 2, true, light, 0xFFFFFFFF);
+    }
+
+    /** 문짝 하나의 방범창 위치 (없으면 null). 문짝 중앙, 바닥에서 1.0~1.65m 의 세로로 긴 창 */
+    public static float[] windowRect(boolean on, float x1, float x2, float y1, float y2) {
+        if (!on || y2 - y1 < 1.5f || x2 - x1 < 0.22f) return null;
+        float cx = (x1 + x2) / 2, hw = Math.min(0.065f, (x2 - x1) * 0.3f);
+        float wy1 = y1 + 1.0f, wy2 = Math.min(y1 + 1.65f, y2 - 0.15f);
+        if (wy2 - wy1 < 0.2f) return null;
+        return new float[]{cx - hw, wy1, cx + hw, wy2};
+    }
+
     /** z 평면에 놓인 사각형 (front=true 면 +Z 를 바라봄) */
     public static void quadZ(PoseStack ps, VertexConsumer vc, float x1, float y1, float x2, float y2, float z, boolean front, int light, int c) {
         Matrix4f m = ps.last().pose();

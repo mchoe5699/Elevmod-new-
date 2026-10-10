@@ -80,7 +80,7 @@ public final class ClientEvents {
         LocalPlayer p = mc.player;
         if (p == null) return;
         // 디자인 변경기: 카 안에서 보고 있는 부위의 의장 변경
-        if (p.getMainHandItem().getItem() instanceof com.mchoe.elevmod.item.DesignToolItem) {
+        if (p.getMainHandItem().getItem() instanceof com.mchoe.elevmod.item.DesignToolItem && !com.mchoe.elevmod.item.DesignToolItem.positionMode(p.getMainHandItem())) {
             for (ElevatorCarEntity car : CARS) {
                 if (car.cCur == null || !car.contains(p, car.cCur)) continue;
                 int part = CarGeometry.pick(car, p.getEyePosition(1f), p.getViewVector(1f), car.cCur);

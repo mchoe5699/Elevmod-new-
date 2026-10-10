@@ -289,17 +289,14 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
             float z1 = rear ? plane - k - 0.006f : plane + k;
             float z2 = rear ? plane - k : plane + k + 0.006f;
             if (r[5] == 1) { RenderUtil.fill(c.ps, c.buf, x1, r[2], z1, x2, r[3], z2, c.il, 0xFF6E7378); continue; }
-            RenderUtil.panel(c.ps, vc, x1, r[2], z1, x2, r[3], z2, c.il, WHITE);
+            float[] win = glass ? null : RenderUtil.windowRect(c.st.getBoolean("win"), x1, x2, r[2], r[3]);
+            if (win == null) RenderUtil.panel(c.ps, vc, x1, r[2], z1, x2, r[3], z2, c.il, WHITE);
+            else RenderUtil.panelWindow(c.ps, c.buf, vc, x1, r[2], z1, x2, r[3], z2, win[0], win[1], win[2], win[3], c.il, WHITE);
             // 세이프티 슈 / 멀티빔(검은 띠) – 앞날 안쪽 면
             if (lead != 0 && H > 1.2f) {
                 float ex = lead > 0 ? x2 - 0.018f : x1, ex2 = lead > 0 ? x2 : x1 + 0.018f;
                 float zi = rear ? z2 : z1 - 0.003f, zj = rear ? z2 + 0.003f : z1;
                 RenderUtil.fill(c.ps, c.buf, ex, 0.04f, zi, ex2, H - 0.06f, zj, c.il, 0xFF141414);
-            }
-            if (c.st.getBoolean("win") && r[3] - r[2] > 1.5f && x2 - x1 > 0.25f) {
-                float cx = (x1 + x2) / 2;
-                float zi = rear ? z2 : z1 - 0.002f, zj = rear ? z2 + 0.002f : z1;
-                RenderUtil.fill(c.ps, c.buf, cx - 0.06f, 1.2f, zi, cx + 0.06f, 1.55f, zj, c.il, 0xFF1C2833);
             }
         }
     }

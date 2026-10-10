@@ -393,5 +393,12 @@
   "elevmod.tenkey.input": "Input",
   "elevmod.tenkey.reserved": "Registered",
   "elevmod.tenkey.hint": "Type digits in order (15 = 1,5), basement: B first. Enter or wait 2 s. Re-enter a lit floor to cancel",
-  "elevmod.info.design_hint": "You can also right-click car parts / hall fixtures with the Design Tool."
+  "elevmod.info.design_hint": "You can also right-click car parts / hall fixtures with the Design Tool.",
+  "elevmod.screen.offset": "Fixture position",
+  "elevmod.offset.reset": "Reset",
+  "elevmod.offset.value": "Horizontal %s  /  Vertical %s  (blocks)",
+  "elevmod.offset.hint": "Arrows = 1/16 block, ½ = half a block. Use ½ to center an indicator between two blocks over an even-width doorway.",
+  "elevmod.design_tool.mode_design": "Mode: design",
+  "elevmod.design_tool.mode_pos": "Mode: position",
+  "item.elevmod.design_tool.tip3": "Sneak + right-click air: toggle design / position mode"
 }
