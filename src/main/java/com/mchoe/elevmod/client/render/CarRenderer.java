@@ -328,21 +328,21 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
             RenderUtil.doorPanel(c.ps, c.buf, vc, x1, r[2], z1, x2, r[3], z2, win, ds == null || !rear, ds == null || rear, c.il, WHITE);
             if (ds != null) {
                 // 카 안쪽 면: 실내에서 볼 때 왼쪽→오른쪽 좌표계. 오목한 부분이 보이도록 깊이만큼 실내 쪽으로 띄움
-                float off = ds.maxRecess() + 0.0005f;
+                float lift = ds.maxRecess() + 0.0005f;
                 float pw = x2 - x1, ph = r[3] - r[2];
                 float[] lw = null;
                 Relief.Frame f;
                 if (!rear) {
-                    f = new Relief.Frame(x2, r[2], z1 - off, -1, 0, 0, 0, 1, 0, 0, 0, -1);
+                    f = new Relief.Frame(x2, r[2], z1 - lift, -1, 0, 0, 0, 1, 0, 0, 0, -1);
                     if (win != null) lw = new float[]{x2 - win[2], win[1] - r[2], x2 - win[0], win[3] - r[2]};
                 } else {
-                    f = new Relief.Frame(x1, r[2], z2 + off, 1, 0, 0, 0, 1, 0, 0, 0, 1);
+                    f = new Relief.Frame(x1, r[2], z2 + lift, 1, 0, 0, 0, 1, 0, 0, 0, 1);
                     if (win != null) lw = new float[]{win[0] - x1, win[1] - r[2], win[2] - x1, win[3] - r[2]};
                 }
                 Relief.draw(c.ps, c.buf, ds, f, pw, ph, c.il, lw);
                 // 띄운 만큼 문짝 옆면을 막음
-                if (off > 0.002f) {
-                    float za = rear ? z2 : z1 - off, zb = rear ? z2 + off : z1;
+                if (lift > 0.002f) {
+                    float za = rear ? z2 : z1 - lift, zb = rear ? z2 + lift : z1;
                     RenderUtil.fill(c.ps, c.buf, x1, r[2], za, x1 + 0.001f, r[3], zb, c.il, 0xFF8A8E92);
                     RenderUtil.fill(c.ps, c.buf, x2 - 0.001f, r[2], za, x2, r[3], zb, c.il, 0xFF8A8E92);
                 }
