@@ -1,0 +1,68 @@
+name: Reference photos
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download elevator photos from Wikimedia Commons
+        run: |
+          mkdir -p ref
+          i=0
+          while IFS= read -r q; do
+            [ -z "$q" ] && continue
+            enc=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$q")
+            curl -s -A "elevmod-ref/1.0 (github actions)" "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${enc}%20filetype:bitmap&gsrlimit=8&prop=imageinfo&iiprop=url&iiurlwidth=900&format=json" > r.json
+            python3 - "$q" <<'PY' > urls.txt
+          import json,sys
+          d=json.load(open('r.json'))
+          for p in (d.get('query',{}).get('pages',{}) or {}).values():
+              ii=p.get('imageinfo',[{}])[0]
+              u=ii.get('thumburl') or ii.get('url')
+              if u: print(u+"\t"+p.get('title',''))
+          PY
+            n=0
+            while IFS=$'\t' read -r u t; do
+              n=$((n+1)); i=$((i+1))
+              slug=$(echo "$q" | tr ' ' '_')
+              curl -s -L -A "elevmod-ref/1.0" -o "ref/${slug}_${n}.jpg" "$u"
+              echo "${slug}_${n}.jpg	$t" >> ref/index.txt
+              sleep 1
+            done < urls.txt
+          done <<'Q'
+          elevator interior
+          elevator car operating panel
+          elevator buttons panel inside
+          elevator hall call button
+          elevator landing doors
+          elevator doors opening
+          two-speed elevator door
+          telescopic elevator door
+          center opening elevator doors
+          elevator door sill
+          elevator lobby
+          elevator ceiling light
+          elevator floor indicator
+          hospital elevator
+          freight elevator
+          elevator handrail mirror
+          Korea elevator
+          elevator hoistway
+          Q
+          ls ref | wc -l
+          cd ref && zip -q ../reference.zip * && cd ..
+          ls -la reference.zip
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: reference-photos
+          name: Reference photos
+          files: reference.zip
+          prerelease: true
+          make_latest: false
