@@ -91,6 +91,7 @@ public class DeviceBlock extends BaseEntityBlock {
     public InteractionResult use(BlockState s, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         boolean fireKeyOnSwitch = kind == Kind.FIRE_SWITCH && player.getItemInHand(hand).is(ModRegistry.FIRE_KEY.get());
         if (player.getItemInHand(hand).getItem() instanceof ElevItem && !fireKeyOnSwitch) return InteractionResult.PASS;
+        if (player.getItemInHand(hand).getItem() instanceof com.mchoe.elevmod.item.DesignToolItem) return InteractionResult.PASS;
         if (level.isClientSide) return InteractionResult.SUCCESS;
         if (!(level.getBlockEntity(pos) instanceof DeviceBlockEntity d)) return InteractionResult.PASS;
         ServerLevel sl = (ServerLevel) level;

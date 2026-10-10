@@ -25,7 +25,7 @@ public class ControllerScreen extends Screen {
     private int tab = 0, renameIdx = 0;
     private EditBox nameBox;
     private final List<String> info = new ArrayList<>();
-    private static final String[] TABS = {"elevmod.tab.spec", "elevmod.tab.options", "elevmod.tab.floors", "elevmod.tab.operation", "elevmod.tab.info", "elevmod.tab.size"};
+    private static final String[] TABS = {"elevmod.tab.spec", "elevmod.tab.options", "elevmod.tab.floors", "elevmod.tab.operation", "elevmod.tab.info", "elevmod.tab.size", "elevmod.tab.design"};
 
     public ControllerScreen(BlockPos pos, CompoundTag data) {
         super(Component.translatable("elevmod.screen.controller"));
@@ -114,8 +114,18 @@ public class ControllerScreen extends Screen {
                 r.add(new Row("clearh", "elevmod.set.clearh", t -> size(t, "clearH", null)));
                 r.add(new Row("jamb", "elevmod.set.jamb", t -> Component.translatable(en(Spec.Jamb.values(), t.getInt("jamb")).key())));
                 r.add(new Row("ceiling", "elevmod.set.ceiling", t -> Component.translatable(en(Spec.Ceiling.values(), t.getInt("ceiling")).key())));
-                r.add(new Row("copside", "elevmod.set.copside", t -> Component.translatable(en(Spec.Side.values(), t.getInt("copSide")).key())));
                 r.add(new Row("hand", "elevmod.set.hand", t -> Component.translatable(en(Spec.Side.values(), Math.max(1, t.getInt("doorHand"))).key())));
+            }
+            case 6 -> {
+                r.add(new Row("copkeys", "elevmod.set.copkeys", t -> Component.translatable(en(Spec.CopKeys.values(), t.getInt("copKeys")).key())));
+                r.add(new Row("ddbtn", "elevmod.set.ddbtn", t -> onOff("ddCopButtons")));
+                r.add(new Row("copside", "elevmod.set.copside", t -> Component.translatable(en(Spec.Side.values(), t.getInt("copSide")).key())));
+                r.add(new Row("accside", "elevmod.set.accside", t -> Component.translatable(en(Spec.Side.values(), t.getInt("accSide")).key())));
+                r.add(new Row("copst", "elevmod.set.copst", t -> Component.translatable(en(Spec.ButtonStyle.values(), t.getInt("copStyle")).key())));
+                r.add(new Row("accst", "elevmod.set.accst", t -> Component.translatable(en(Spec.ButtonStyle.values(), t.getInt("accStyle")).key())));
+                r.add(new Row("disp", "elevmod.set.disp", t -> Component.translatable(en(Spec.Display.values(), t.getInt("carDisplay")).key())));
+                r.add(new Row("wallf", "elevmod.set.wallf", t -> Component.translatable(en(Spec.WallFinish.values(), t.getInt("wallFinish")).key())));
+                r.add(new Row("floorf", "elevmod.set.floorf", t -> Component.translatable(en(Spec.FloorFinish.values(), t.getInt("floorFinish")).key())));
             }
             default -> {}
         }
@@ -129,7 +139,7 @@ public class ControllerScreen extends Screen {
         for (int i = 0; i < TABS.length; i++) {
             final int ti = i;
             Button b = Button.builder(Component.translatable(TABS[i]).withStyle(i == tab ? ChatFormatting.YELLOW : ChatFormatting.WHITE), x -> { tab = ti; rebuildWidgets(); })
-                    .bounds(left + i * 57, top, 55, 18).build();
+                    .bounds(left + i * 49, top, 47, 18).build();
             addRenderableWidget(b);
         }
         int y0 = top + 26;
@@ -202,6 +212,7 @@ public class ControllerScreen extends Screen {
                     left + 120, y0 + 8 * 22 + 12, 0xFFAAAAAA, false);
             g.drawString(font, I18n.get("elevmod.info.size_hint"), left, y0 + 8 * 22 + 32, 0xFF888888, false);
         }
+        if (tab == 6) g.drawString(font, I18n.get("elevmod.info.design_hint"), left, y0 + 8 * 22 + 12, 0xFF888888, false);
         if (tab == 0) {
             g.drawString(font, I18n.get("elevmod.info.dims", String.format("%.2f", data.getFloat("cw")), String.format("%.2f", data.getFloat("cd")), String.format("%.2f", data.getFloat("ch"))),
                     left, y0 + 6 * 22 + 8, 0xFFAAAAAA, false);

@@ -24,6 +24,9 @@ public final class ClientEvents {
 
     private static final List<ElevatorCarEntity> CARS = new ArrayList<>();
 
+    /** 현재 클라이언트 월드의 카 목록 (렌더러에서 승강장 문 연동에 사용) */
+    public static List<ElevatorCarEntity> cars() { return CARS; }
+
     /** 틱 시작: 모든 카 위치 예측 갱신 */
     @SubscribeEvent
     public static void clientTick(TickEvent.ClientTickEvent e) {
@@ -76,6 +79,19 @@ public final class ClientEvents {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer p = mc.player;
         if (p == null) return;
+        // 디자인 변경기: 카 안에서 보고 있는 부위의 의장 변경
+        if (p.getMainHandItem().getItem() instanceof com.mchoe.elevmod.item.DesignToolItem) {
+            for (ElevatorCarEntity car : CARS) {
+                if (car.cCur == null || !car.contains(p, car.cCur)) continue;
+                int part = CarGeometry.pick(car, p.getEyePosition(1f), p.getViewVector(1f), car.cCur);
+                if (part < 0) continue;
+                com.mchoe.elevmod.network.Net.CH.sendToServer(new com.mchoe.elevmod.network.Net.CarActionMsg(car.controller(),
+                        com.mchoe.elevmod.elevator.CarAction.DESIGN, part * 2 + (p.isShiftKeyDown() ? 1 : 0)));
+                e.setCanceled(true);
+                e.setSwingHand(true);
+                return;
+            }
+        }
         for (ElevatorCarEntity car : CARS) {
             if (car.cCur == null || !car.contains(p, car.cCur) || !car.usage().hasCop()) continue;
             int hit = CarGeometry.lookingAtCop(car, p.getEyePosition(1f), p.getViewVector(1f), car.cCur);

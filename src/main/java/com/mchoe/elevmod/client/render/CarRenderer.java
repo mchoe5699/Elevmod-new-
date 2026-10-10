@@ -5,6 +5,7 @@ import com.mchoe.elevmod.entity.ElevatorCarEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.culling.Frustum;
@@ -71,7 +72,14 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         c.fw = st.getFloat("fw"); c.fh = st.getFloat("fh"); c.fo = st.getFloat("fo");
         c.rw = st.getFloat("rw"); c.rh = st.getFloat("rh"); c.ro = st.getFloat("ro");
         c.glass = st.getBoolean("glass") || c.theme == Spec.Theme.GLASS;
-        c.right = st.getBoolean("rh");
+        c.right = st.getBoolean("hand");
+        c.wallF = en(Spec.WallFinish.values(), st.getInt("wallf"));
+        c.floorF = en(Spec.FloorFinish.values(), st.getInt("floorf"));
+        c.copSt = en(Spec.ButtonStyle.values(), st.getInt("copst"));
+        c.accSt = en(Spec.ButtonStyle.values(), st.getInt("accst"));
+        c.disp = en(Spec.Display.values(), st.getInt("disp"));
+        c.tenkey = st.getBoolean("tenkey");
+        c.cbtn = !st.contains("cbtn") || st.getBoolean("cbtn");
         c.car = car;
 
         if (c.usage == Spec.Usage.WHEELCHAIR_LIFT) renderLift(c);
@@ -85,10 +93,23 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         PoseStack ps; MultiBufferSource buf; CompoundTag st; ElevatorCarEntity car;
         int light, il; float w, h, d, door, carAbs, fw, fh, fo, rw, rh, ro;
         Spec.Usage usage; Spec.Drive drive; Spec.DoorType dt; Spec.Theme theme; Spec.Ceiling ceiling;
-        boolean lights, emg, glass, right;
+        Spec.WallFinish wallF; Spec.FloorFinish floorF; Spec.ButtonStyle copSt, accSt; Spec.Display disp;
+        boolean lights, emg, glass, right, tenkey, cbtn;
     }
 
     private String wallTex(Ctx c) {
+        if (c.wallF != Spec.WallFinish.AUTO && c.usage != Spec.Usage.CONSTRUCTION) {
+            return switch (c.wallF) {
+                case HAIRLINE -> "panel_stainless";
+                case ETCHED -> "panel_etched";
+                case MIRROR -> "panel_mirror";
+                case GOLD -> "panel_gold";
+                case WOOD -> "panel_wood";
+                case WHITE -> "panel_white";
+                case MARBLE -> "panel_marble";
+                default -> "panel_stainless";
+            };
+        }
         if (c.usage == Spec.Usage.FREIGHT || c.usage == Spec.Usage.CAR || c.usage == Spec.Usage.CONSTRUCTION)
             return c.theme == Spec.Theme.STAINLESS || c.theme == Spec.Theme.CHECKER ? "panel_checker" : "panel_" + c.theme.tex();
         if (c.usage == Spec.Usage.PATERNOSTER) return "panel_wood";
@@ -121,7 +142,14 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         VertexConsumer kick = RenderUtil.solid(buf, "kick");
 
         // ---- 바닥 + 플랫폼
-        String floorTex = freight ? "floor_checker" : c.usage == Spec.Usage.PATERNOSTER ? "panel_wood" : "floor_granite";
+        String floorTex = switch (c.floorF) {
+            case GRANITE -> "floor_granite";
+            case MARBLE -> "floor_marble";
+            case CHECKER -> "floor_checker";
+            case RUBBER -> "floor_rubber";
+            case WOOD -> "floor_wood";
+            default -> freight ? "floor_checker" : c.usage == Spec.Usage.PATERNOSTER ? "panel_wood" : "floor_granite";
+        };
         RenderUtil.box(ps, RenderUtil.solid(buf, floorTex), -w / 2, -0.1f, -d / 2, w / 2, 0, d / 2 - T, c.il, WHITE);
         RenderUtil.box(ps, steel, -w / 2 - T, -0.22f, -d / 2 - T, w / 2 + T, -0.1f, d / 2, c.light, WHITE);
 
@@ -168,7 +196,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
 
         // ---- 거울(후면 상부) + 핸드레일
         boolean passenger = c.usage.passengerCar() && !c.glass;
-        if (passenger && c.rw <= 0 && c.theme != Spec.Theme.MIRROR)
+        if (passenger && c.rw <= 0 && c.theme != Spec.Theme.MIRROR && c.wallF != Spec.WallFinish.MIRROR)
             RenderUtil.panel(ps, RenderUtil.solid(buf, "mirror"), -w / 2 + 0.12f, 1.0f, -d / 2 + 0.014f, w / 2 - 0.12f, h - 0.14f, -d / 2 + 0.02f, c.il, WHITE);
         if (c.usage.passengerCar() || c.glass) handrails(c);
         if (freight && !mesh) bumpers(c);
@@ -191,7 +219,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         if (c.usage.hasCop()) {
             cop(c);
             if (c.fw > 0 && c.h - c.fh >= 0.24f) transomIndicator(c);
-            if (c.st.getBoolean("acc")) accessibleCop(c);
+            if (c.st.getBoolean("acc")) for (float[] b : CarGeometry.accessibleCops(c.car)) accessibleCop(c, b);
         }
     }
 
@@ -358,30 +386,96 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
     }
 
     // ================================================================== 운전반
+    private static String faceTex(Spec.ButtonStyle st) {
+        return switch (st) {
+            case TOUCH -> "cop_face_black";
+            case CLASSIC -> "cop_face_classic";
+            default -> "cop_face";
+        };
+    }
+
     private void cop(Ctx c) {
-        CarGeometry.Cop cop = CarGeometry.cop(c.car);
-        float[] b = cop.box();
-        PoseStack ps = c.ps;
-        RenderUtil.panel(ps, RenderUtil.solid(c.buf, "cop_face"), b[0], b[1], b[2], b[3], b[4], b[5], c.il, WHITE);
-        ps.pushPose();
-        // 판넬 앞면을 원점, 카 안쪽을 +Z, 오른쪽을 +X 로 하는 좌표계로 변환
-        float pw;
-        if (cop.wall() == 0) {
-            ps.translate((b[0] + b[3]) / 2, 0, b[2]);
-            ps.mulPose(Axis.YP.rotationDegrees(180));
-            pw = b[3] - b[0];
-        } else {
-            float face = cop.wall() > 0 ? b[0] : b[3];
-            ps.translate(face, 0, (b[2] + b[5]) / 2);
-            ps.mulPose(Axis.YP.rotationDegrees(cop.wall() > 0 ? -90 : 90));
-            pw = b[5] - b[2];
+        for (CarGeometry.Cop cop : CarGeometry.cops(c.car)) {
+            float[] b = cop.box();
+            PoseStack ps = c.ps;
+            RenderUtil.panel(ps, RenderUtil.solid(c.buf, faceTex(c.copSt)), b[0], b[1], b[2], b[3], b[4], b[5], c.il, WHITE);
+            ps.pushPose();
+            // 판넬 앞면을 원점, 카 안쪽을 +Z, 오른쪽을 +X 로 하는 좌표계로 변환
+            float pw;
+            if (cop.wall() == 0) {
+                ps.translate((b[0] + b[3]) / 2, 0, b[2]);
+                ps.mulPose(Axis.YP.rotationDegrees(180));
+                pw = b[3] - b[0];
+            } else {
+                float face = cop.wall() > 0 ? b[0] : b[3];
+                ps.translate(face, 0, (b[2] + b[5]) / 2);
+                ps.mulPose(Axis.YP.rotationDegrees(cop.wall() > 0 ? -90 : 90));
+                pw = b[5] - b[2];
+            }
+            copFace(c, pw, b[1], b[4]);
+            ps.popPose();
         }
-        copFace(c, pw, b[1], b[4], false);
-        ps.popPose();
+    }
+
+    /** 버튼 하나 (로컬 z 평면, +Z 가 사람 쪽) */
+    private void button(Ctx c, Spec.ButtonStyle st, float x, float y, float size, boolean lit, String label, float z, boolean alarm) {
+        String tex = switch (st) {
+            case SQUARE -> lit ? "btn_sq_lit" : "btn_sq";
+            case TOUCH -> lit ? "btn_touch_lit" : "btn_touch";
+            case CLASSIC -> lit ? "btn_classic_lit" : "btn_classic";
+            default -> lit ? "btn_lit" : "btn";
+        };
+        if (alarm && st != Spec.ButtonStyle.TOUCH) tex = "btn_alarm";
+        float s = size / 2;
+        RenderUtil.quadZ(c.ps, RenderUtil.cut(c.buf, tex), x - s, y - s, x + s, y + s, z + 0.004f, true, lit ? RenderUtil.FULL : c.il, WHITE);
+        int col = switch (st) {
+            case TOUCH -> lit ? 0xFF7FE8FF : 0xFFD8DCE0;
+            case CLASSIC -> lit ? 0xFFFF5A20 : 0xFF141414;
+            default -> lit ? 0xFFFFB020 : 0xFF1A1A1A;
+        };
+        if (alarm) col = st == Spec.ButtonStyle.TOUCH ? 0xFFFFC040 : 0xFF1A1A1A;
+        float ts = label.length() > 2 ? size * 0.28f : size * 0.42f;
+        RenderUtil.text(c.ps, c.buf, label, x, y + size * 0.04f, z + 0.005f, ts, col);
+    }
+
+    private static String pad2(String s) { return s.length() >= 2 ? s : " " + s; }
+
+    /** 위치표시 창: 소자 종류에 따라 7세그먼트 / 도트매트릭스 / LCD */
+    private void indicator(Ctx c, float x1, float y1, float x2, float y2, float z, String cur, int dir) {
+        PoseStack ps = c.ps;
+        MultiBufferSource buf = c.buf;
+        float h = y2 - y1, cy = (y1 + y2) / 2, wdt = x2 - x1;
+        float ax = x1 + wdt * 0.17f, tx = x1 + wdt * 0.6f, tw = wdt * 0.7f;
+        switch (c.disp) {
+            case SEGMENT -> {
+                Glyphs.rect(ps, buf, x1, y1, x2, y2, z, RenderUtil.FULL, 0xFF140404);
+                String t = pad2(cur);
+                float gh = Math.min(h * 0.72f, tw / (t.length() * 0.56f + (t.length() - 1) * 0.2f));
+                int red = 0xFFFF2A10;
+                Glyphs.arrow(ps, buf, ax, cy + gh * 0.3f, gh * 0.36f, 1, z + 0.0004f, dir > 0 ? RenderUtil.FULL : c.il, dir > 0 ? red : Glyphs.dim(red, 0.14f));
+                Glyphs.arrow(ps, buf, ax, cy - gh * 0.3f, gh * 0.36f, -1, z + 0.0004f, dir < 0 ? RenderUtil.FULL : c.il, dir < 0 ? red : Glyphs.dim(red, 0.14f));
+                Glyphs.seg(ps, buf, t, tx, cy, gh, z + 0.0004f, c.il, red, 0.13f);
+            }
+            case DOT -> {
+                Glyphs.rect(ps, buf, x1, y1, x2, y2, z, RenderUtil.FULL, 0xFF0C0806);
+                float gh = Math.min(h * 0.74f, tw / (cur.length() * 5f / 7f + (cur.length() - 1) / 7f));
+                int amber = 0xFFFF8A18;
+                float scroll = 0;
+                if (c.st.getInt("dir") != 0 && Minecraft.getInstance().level != null) scroll = (Minecraft.getInstance().level.getGameTime() % 14) / 14f;
+                if (dir != 0) Glyphs.dots(ps, buf, dir > 0 ? "^" : "v", ax, cy, Math.min(gh, wdt * 0.26f * 7 / 5), z + 0.0004f, c.il, amber, 0.1f, scroll);
+                else Glyphs.dots(ps, buf, " ", ax, cy, Math.min(gh, wdt * 0.26f * 7 / 5), z + 0.0004f, c.il, amber, 0.1f, 0);
+                Glyphs.dots(ps, buf, cur, tx, cy, gh, z + 0.0004f, c.il, amber, 0.1f, 0);
+            }
+            case LCD -> {
+                Glyphs.rect(ps, buf, x1, y1, x2, y2, z, RenderUtil.FULL, 0xFF0E2E66);
+                RenderUtil.text(ps, buf, RenderUtil.arrow(dir), ax, cy, z + 0.001f, h * 0.5f, 0xFF7FE3FF);
+                RenderUtil.text(ps, buf, cur, tx, cy, z + 0.001f, h * 0.7f, WHITE);
+            }
+        }
     }
 
     /** 운전반 면 그리기 (로컬: x ∈ [-pw/2, pw/2], z=0 이 면, +Z 가 사람 쪽) */
-    private void copFace(Ctx c, float pw, float y1, float y2, boolean compact) {
+    private void copFace(Ctx c, float pw, float y1, float y2) {
         PoseStack ps = c.ps;
         MultiBufferSource buf = c.buf;
         CompoundTag st = c.st;
@@ -389,96 +483,161 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         byte[] calls = st.getByteArray("c");
         int n = names.size();
         float z = 0.001f;
+        Spec.ButtonStyle bs0 = c.copSt;
+        boolean touch = bs0 == Spec.ButtonStyle.TOUCH;
+        int engrave = touch ? 0xFFB8BCC0 : 0xFF303030;
         // 표시창
         float dy1 = y2 - 0.17f, dy2 = y2 - 0.05f;
-        RenderUtil.fill(ps, buf, -pw / 2 + 0.03f, dy1, 0, pw / 2 - 0.03f, dy2, z + 0.002f, RenderUtil.FULL, BLACK);
         String cur = n > 0 ? names.getString(Math.max(0, Math.min(st.getInt("cur"), n - 1))) : "";
-        int dir = st.getInt("dir");
-        RenderUtil.text(ps, buf, RenderUtil.arrow(dir), -pw / 2 + 0.07f, (dy1 + dy2) / 2, z + 0.003f, 0.06f, 0xFFFF3A1A);
-        RenderUtil.text(ps, buf, cur, 0.02f, (dy1 + dy2) / 2, z + 0.003f, 0.08f, 0xFFFF3A1A);
+        indicator(c, -pw / 2 + 0.03f, dy1, pw / 2 - 0.03f, dy2, z + 0.002f, cur, st.getInt("dir"));
         String sk = st.getString("st");
-        if (!sk.isEmpty()) RenderUtil.text(ps, buf, I18n.get("elevmod.status." + sk), 0, dy1 + 0.014f, z + 0.003f, 0.016f, 0xFFFFD040);
+        if (!sk.isEmpty()) RenderUtil.text(ps, buf, I18n.get("elevmod.status." + sk), 0, dy1 - 0.012f, z + 0.003f, 0.016f, touch ? 0xFFFFD040 : 0xFFB06000);
         // 스피커 그릴
         for (int i = 0; i < 5; i++) {
             float sx = -0.04f + i * 0.02f;
-            RenderUtil.fill(ps, buf, sx - 0.004f, dy1 - 0.035f, 0, sx + 0.004f, dy1 - 0.015f, z + 0.001f, c.il, 0xFF2A2C30);
+            RenderUtil.fill(ps, buf, sx - 0.004f, dy1 - 0.05f, 0, sx + 0.004f, dy1 - 0.03f, z + 0.001f, c.il, touch ? 0xFF3A3E44 : 0xFF2A2C30);
         }
-        // 층 버튼
-        int cols = n <= 12 ? 2 : n <= 27 ? 3 : 4;
-        int rows = Math.max(1, (n + cols - 1) / cols);
-        float top = dy1 - 0.06f, bottom = y1 + 0.2f;
-        float cell = Math.min(0.075f, (top - bottom) / rows);
-        float colW = Math.min(0.075f, (pw - 0.04f) / cols);
-        float bs = Math.min(cell, colW) * 0.78f;
-        VertexConsumer off = RenderUtil.cut(buf, "btn"), on = RenderUtil.cut(buf, "btn_lit");
-        for (int i = 0; i < n; i++) {
-            int r = (n - 1 - i) / cols, col = i % cols;
-            float x = (col - (cols - 1) / 2f) * colW;
-            float y = top - r * cell - cell / 2;
-            boolean lit = i < calls.length && (calls[i] & 1) != 0;
-            RenderUtil.quadZ(ps, lit ? on : off, x - bs / 2, y - bs / 2, x + bs / 2, y + bs / 2, z + 0.004f, true, lit ? RenderUtil.FULL : c.il, WHITE);
-            RenderUtil.text(ps, buf, names.getString(i), x, y + bs * 0.04f, z + 0.005f, bs * 0.42f, lit ? 0xFFFFB020 : 0xFF1A1A1A);
+        float top = dy1 - 0.07f, bottom = y1 + 0.2f;
+        if (!c.cbtn) {
+            // 행선층 예약(DD) 카: 층 버튼 없음 – 등록된 행선층만 표시
+            float sy = top - 0.09f;
+            Glyphs.rect(ps, buf, -pw / 2 + 0.03f, sy, pw / 2 - 0.03f, top, z + 0.002f, RenderUtil.FULL, 0xFF0A1E3C);
+            RenderUtil.text(ps, buf, I18n.get("elevmod.cop.dest_list"), 0, top - 0.016f, z + 0.003f, 0.014f, 0xFF9FD8FF);
+            RenderUtil.text(ps, buf, litList(names, calls, 5), 0, sy + 0.03f, z + 0.003f, 0.024f, WHITE);
+        } else if (c.tenkey) {
+            tenkeyPad(c, bs0, -pw / 2 + 0.02f, pw / 2 - 0.02f, bottom, top, z, 3, names, calls);
+        } else {
+            // 층 버튼
+            int cols = n <= 12 ? 2 : n <= 27 ? 3 : 4;
+            int rows = Math.max(1, (n + cols - 1) / cols);
+            float cell = Math.min(0.075f, (top - bottom) / rows);
+            float colW = Math.min(0.075f, (pw - 0.04f) / cols);
+            float bs = Math.min(cell, colW) * 0.78f;
+            for (int i = 0; i < n; i++) {
+                int r = (n - 1 - i) / cols, col = i % cols;
+                float x = (col - (cols - 1) / 2f) * colW;
+                float y = top - r * cell - cell / 2;
+                boolean lit = i < calls.length && (calls[i] & 1) != 0;
+                button(c, bs0, x, y, bs, lit, names.getString(i), z, false);
+            }
         }
         // 열림 / 닫힘 / 비상벨
         float by = y1 + 0.11f;
         float gap = Math.min(0.065f, (pw - 0.04f) / 3);
-        float b2 = Math.min(bs, gap * 0.8f);
+        float b2 = Math.min(0.058f, gap * 0.8f);
         String[] lab = {"◀▶", "▶◀", "!"};
-        for (int i = 0; i < 3; i++) {
-            float x = (i - 1) * gap;
-            RenderUtil.quadZ(ps, i == 2 ? RenderUtil.cut(buf, "btn_alarm") : off, x - b2 / 2, by - b2 / 2, x + b2 / 2, by + b2 / 2, z + 0.004f, true, c.il, WHITE);
-            RenderUtil.text(ps, buf, lab[i], x, by, z + 0.005f, b2 * 0.32f, 0xFF1A1A1A);
-        }
+        for (int i = 0; i < 3; i++) button(c, bs0, (i - 1) * gap, by, b2, false, lab[i], z, i == 2);
         // 키 스위치 + 정격 표기
         RenderUtil.fill(ps, buf, -0.012f, y1 + 0.03f, 0, 0.012f, y1 + 0.055f, z + 0.002f, c.il, 0xFF202020);
         int kg = st.getInt("kg");
-        RenderUtil.text(ps, buf, Spec.persons(kg) + "인승 " + kg + "kg", 0, y1 + 0.175f, z + 0.002f, 0.013f, 0xFF303030);
+        RenderUtil.text(ps, buf, Spec.persons(kg) + "인승 " + kg + "kg", 0, y1 + 0.175f, z + 0.002f, 0.013f, engrave);
         if (st.getBoolean("stop"))
             RenderUtil.quadZ(ps, RenderUtil.cut(buf, "btn"), pw / 2 - 0.05f, y1 + 0.02f, pw / 2 - 0.015f, y1 + 0.055f, z + 0.004f, true, st.getBoolean("sp") ? RenderUtil.FULL : c.il, 0xFFFF4040);
     }
 
-    private void accessibleCop(Ctx c) {
-        float[] b = CarGeometry.accessibleCop(c.car);
+    /** 등록된 층 목록 문자열 (최대 max 개) */
+    private static String litList(ListTag names, byte[] calls, int max) {
+        StringBuilder sb = new StringBuilder();
+        int k = 0;
+        for (int i = 0; i < names.size() && k < max; i++) {
+            if (i < calls.length && (calls[i] & 1) != 0) { if (sb.length() > 0) sb.append(' '); sb.append(names.getString(i)); k++; }
+        }
+        return sb.length() == 0 ? "-" : sb.toString();
+    }
+
+    /**
+     * 텐키(10-KEY) 패드: 숫자 0~9, B(지하), C(정정/취소), 등록. 위에 예약층(등록된 행선층) 표시창.
+     * cols = 3 이면 세로형(주 운전반), 7 이면 가로형(장애인 운전반).
+     */
+    private void tenkeyPad(Ctx c, Spec.ButtonStyle bst, float x1, float x2, float yb, float yt, float z, int cols, ListTag names, byte[] calls) {
+        String[] keys = cols == 3
+                ? new String[]{"1", "2", "3", "4", "5", "6", "7", "8", "9", "B", "0", "C"}
+                : new String[]{"1", "2", "3", "4", "5", "6", "B", "7", "8", "9", "0", "C"};
+        float stripH = cols == 3 ? 0.06f : 0f;
+        if (stripH > 0) {
+            Glyphs.rect(c.ps, c.buf, x1 + 0.01f, yt - stripH, x2 - 0.01f, yt, z + 0.002f, RenderUtil.FULL, 0xFF0A1E3C);
+            RenderUtil.text(c.ps, c.buf, litList(names, calls, 4), (x1 + x2) / 2, yt - stripH / 2, z + 0.003f, 0.02f, WHITE);
+        }
+        int rows = cols == 3 ? 5 : 2;
+        int perRow = cols == 3 ? 3 : 7;
+        float cw = (x2 - x1) / perRow, rh = (yt - stripH - 0.01f - yb) / rows;
+        float bs = Math.min(cw, rh) * 0.8f;
+        for (int i = 0; i < keys.length; i++) {
+            int r = i / perRow, col = i % perRow;
+            float x = x1 + cw * (col + 0.5f), y = yt - stripH - 0.01f - rh * (r + 0.5f);
+            button(c, bst, x, y, bs, false, keys[i], z, false);
+        }
+        // 등록 키
+        if (cols == 3) {
+            float y = yt - stripH - 0.01f - rh * 4.5f;
+            float kx1 = x1 + cw * 0.12f, kx2 = x2 - cw * 0.12f;
+            String tex = bst == Spec.ButtonStyle.TOUCH ? "btn_touch" : "btn_sq";
+            RenderUtil.quadZ(c.ps, RenderUtil.cut(c.buf, tex), kx1, y - bs / 2, kx2, y + bs / 2, z + 0.004f, true, c.il, WHITE);
+            RenderUtil.text(c.ps, c.buf, I18n.get("elevmod.tenkey.enter"), (x1 + x2) / 2, y, z + 0.006f, bs * 0.34f, bst == Spec.ButtonStyle.TOUCH ? 0xFFD8DCE0 : 0xFF1A1A1A);
+        } else {
+            int i = keys.length;
+            float x = x1 + cw * (i % perRow + 0.5f), y = yt - rh * (i / perRow + 0.5f);
+            button(c, bst, x, y, bs, false, I18n.get("elevmod.tenkey.enter"), z, false);
+        }
+    }
+
+    private void accessibleCop(Ctx c, float[] b) {
         PoseStack ps = c.ps;
-        RenderUtil.panel(ps, RenderUtil.solid(c.buf, "cop_face"), b[0], b[1], b[2], b[3], b[4], b[5], c.il, WHITE);
+        boolean leftWall = b[0] > 0; // +X 벽
+        RenderUtil.panel(ps, RenderUtil.solid(c.buf, faceTex(c.accSt)), b[0], b[1], b[2], b[3], b[4], b[5], c.il, WHITE);
         ps.pushPose();
-        ps.translate(b[0], 0, (b[2] + b[5]) / 2);
-        ps.mulPose(Axis.YP.rotationDegrees(-90)); // +Z 가 카 안쪽(-X)
+        ps.translate(leftWall ? b[0] : b[3], 0, (b[2] + b[5]) / 2);
+        ps.mulPose(Axis.YP.rotationDegrees(leftWall ? -90 : 90)); // +Z 가 카 안쪽
         float len = b[5] - b[2];
         ListTag names = c.st.getList("n", Tag.TAG_STRING);
         byte[] calls = c.st.getByteArray("c");
         int n = names.size();
-        int perRow = Math.max(1, Math.min(n, (int) ((len - 0.04f) / 0.055f)));
-        int rows = Math.max(1, (n + perRow - 1) / perRow);
-        float cell = (len - 0.04f) / perRow;
-        float rowH = (b[4] - b[1] - 0.03f) / rows;
-        float bs = Math.min(cell, rowH) * 0.75f;
-        VertexConsumer off = RenderUtil.cut(c.buf, "btn"), on = RenderUtil.cut(c.buf, "btn_lit");
-        for (int i = 0; i < n; i++) {
-            int r = i / perRow, col = i % perRow;
-            float x = -len / 2 + 0.02f + cell * (col + 0.5f);
-            float y = b[4] - 0.015f - rowH * (r + 0.5f);
-            boolean lit = i < calls.length && (calls[i] & 1) != 0;
-            RenderUtil.quadZ(ps, lit ? on : off, x - bs / 2, y - bs / 2, x + bs / 2, y + bs / 2, 0.004f, true, lit ? RenderUtil.FULL : c.il, WHITE);
-            RenderUtil.text(ps, c.buf, names.getString(i), x, y, 0.005f, bs * 0.42f, lit ? 0xFFFFB020 : 0xFF1A1A1A);
+        float y1 = b[1], y2 = b[4];
+        // 오른쪽 끝: 열림/닫힘/비상
+        float side = 0.075f;
+        float colX = len / 2 - 0.02f - side / 2;
+        float rh3 = (y2 - y1 - 0.02f) / 3;
+        float sb = Math.min(side * 0.8f, rh3 * 0.82f);
+        String[] lab = {"◀▶", "▶◀", "!"};
+        for (int i = 0; i < 3; i++) button(c, c.accSt, colX, y2 - 0.01f - rh3 * (i + 0.5f), sb, false, lab[i], 0, i == 2);
+        float ax1 = -len / 2 + 0.02f, ax2 = len / 2 - 0.03f - side;
+        if (!c.cbtn) {
+            Glyphs.rect(ps, c.buf, ax1, y1 + 0.03f, ax2, y2 - 0.03f, 0.003f, RenderUtil.FULL, 0xFF0A1E3C);
+            RenderUtil.text(ps, c.buf, litList(names, calls, 5), (ax1 + ax2) / 2, (y1 + y2) / 2, 0.004f, 0.026f, WHITE);
+        } else if (c.tenkey) {
+            tenkeyPad(c, c.accSt, ax1, ax2, y1 + 0.01f, y2 - 0.01f, 0, 7, names, calls);
+        } else {
+            float al = ax2 - ax1;
+            int perRow = Math.max(1, Math.min(n, (int) (al / 0.055f)));
+            int rows = Math.max(1, (n + perRow - 1) / perRow);
+            float cell = al / perRow;
+            float rowH = (y2 - y1 - 0.03f) / rows;
+            float bs = Math.min(cell, rowH) * 0.75f;
+            for (int i = 0; i < n; i++) {
+                int r = i / perRow, col = i % perRow;
+                float x = ax1 + cell * (col + 0.5f);
+                float y = y2 - 0.015f - rowH * (r + 0.5f);
+                boolean lit = i < calls.length && (calls[i] & 1) != 0;
+                button(c, c.accSt, x, y, bs, lit, names.getString(i), 0, false);
+            }
         }
         ps.popPose();
     }
 
     /** 트랜섬(문 위) 위치표시기 */
     private void transomIndicator(Ctx c) {
-        float z = c.d / 2 - T;
-        float y1 = c.fh + 0.05f, y2 = Math.min(c.h - 0.06f, c.fh + 0.19f);
-        RenderUtil.fill(c.ps, c.buf, c.fo - 0.16f, y1, z - 0.006f, c.fo + 0.16f, y2, z, RenderUtil.FULL, BLACK);
+        float[] b = CarGeometry.transom(c.car);
+        if (b == null) return;
         ListTag names = c.st.getList("n", Tag.TAG_STRING);
         int n = names.size();
-        if (n == 0) return;
-        String cur = names.getString(Math.max(0, Math.min(c.st.getInt("cur"), n - 1)));
+        float z = c.d / 2 - T;
+        // 테두리(스테인리스 프레임)
+        RenderUtil.fill(c.ps, c.buf, b[0] - 0.012f, b[1] - 0.012f, z - 0.004f, b[3] + 0.012f, b[4] + 0.012f, z, c.il, 0xFF9AA0A6);
         c.ps.pushPose();
-        c.ps.translate(c.fo, 0, z - 0.007f);
+        c.ps.translate(c.fo, 0, z - 0.005f);
         c.ps.mulPose(Axis.YP.rotationDegrees(180));
-        RenderUtil.text(c.ps, c.buf, RenderUtil.arrow(c.st.getInt("dir")), -0.08f, (y1 + y2) / 2, 0, 0.08f, 0xFFFF3A1A);
-        RenderUtil.text(c.ps, c.buf, cur, 0.04f, (y1 + y2) / 2, 0, 0.1f, 0xFFFF3A1A);
+        String cur = n == 0 ? "" : names.getString(Math.max(0, Math.min(c.st.getInt("cur"), n - 1)));
+        indicator(c, -0.16f, b[1], 0.16f, b[4], 0, cur, c.st.getInt("dir"));
         c.ps.popPose();
     }
 

@@ -154,6 +154,55 @@ public final class PhotoScenes {
         SHOTS.add(new Shot("42_gold_front", x + 0.5, Y0, -gd.cd + 0.3, 0, 8, gd.getBlockPos(), 0f, 0));
         SHOTS.add(new Shot("43_gold_hall", x + 0.5, Y0, 3.6, 180, 6, gd.getBlockPos(), 0f, 0));
 
+        // ---- F: 텐키 + 양쪽 운전반 + 양쪽 장애인 운전반, 터치식, 도트 표시기, 에칭 벽, 대리석 바닥
+        x += 10;
+        ControllerBlockEntity tk = elevator(l, p, x, 0, 3, 4, 1, 2, false, cc -> {
+            cc.usage = Spec.Usage.PASSENGER; cc.capIdx = 9; cc.copKeys = Spec.CopKeys.TENKEY; cc.copSide = Spec.Side.BOTH;
+            cc.accSide = Spec.Side.BOTH; cc.accessibleCop = true; cc.copStyle = Spec.ButtonStyle.TOUCH; cc.accStyle = Spec.ButtonStyle.TOUCH;
+            cc.carDisplay = Spec.Display.DOT; cc.wallFinish = Spec.WallFinish.ETCHED; cc.floorFinish = Spec.FloorFinish.MARBLE;
+            cc.ceiling = Spec.Ceiling.DOWNLIGHT;
+        });
+        double tx = x + 0.5;
+        SHOTS.add(new Shot("50_tenkey_front", tx, Y0, -tk.cd + 0.25, 0, 10, tk.getBlockPos(), 0f, 0));
+        float tkCop = (float) (tx + (-tk.cw / 2 + tk.frontOff - tk.frontW / 2) / 2);
+        SHOTS.add(new Shot("51_tenkey_cop", tkCop, Y0 - 0.15, -0.72, 0, 22, tk.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("52_acc_left", tx, Y0 - 0.35, -tk.cd / 2 - 0.05, -90, 18, tk.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("53_acc_right", tx, Y0 - 0.35, -tk.cd / 2 - 0.05, 90, 18, tk.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("54_dot_transom", tx, Y0 + 0.2, -0.95, 0, -30, tk.getBlockPos(), 0f, 0));
+        // ---- G: 7세그먼트 트랜섬 + 구형 버튼 + 고무바닥 + 대리석 벽, 행선층(DD) 카(층버튼 없음)
+        x += 10;
+        ControllerBlockEntity sg = elevator(l, p, x, 0, 3, 4, 1, 2, false, cc -> {
+            cc.usage = Spec.Usage.PASSENGER; cc.capIdx = 7; cc.copStyle = Spec.ButtonStyle.CLASSIC; cc.carDisplay = Spec.Display.SEGMENT;
+            cc.wallFinish = Spec.WallFinish.MARBLE; cc.floorFinish = Spec.FloorFinish.RUBBER;
+        });
+        SHOTS.add(new Shot("55_seg_transom", x + 0.5, Y0 + 0.2, -0.95, 0, -30, sg.getBlockPos(), 0f, 0));
+        float sgCop = (float) (x + 0.5 + (-sg.cw / 2 + sg.frontOff - sg.frontW / 2) / 2);
+        SHOTS.add(new Shot("56_classic_cop", sgCop, Y0 - 0.15, -0.72, 0, 22, sg.getBlockPos(), 0f, 0));
+        x += 10;
+        ControllerBlockEntity dd = elevator(l, p, x, 0, 3, 4, 1, 2, false, cc -> {
+            cc.usage = Spec.Usage.PASSENGER; cc.capIdx = 7; cc.destination = true; cc.ddCopButtons = false; cc.copStyle = Spec.ButtonStyle.SQUARE;
+        });
+        float ddCop = (float) (x + 0.5 + (-dd.cw / 2 + dd.frontOff - dd.frontW / 2) / 2);
+        SHOTS.add(new Shot("57_dd_cop_nobuttons", ddCop, Y0 - 0.15, -0.72, 0, 22, dd.getBlockPos(), 0f, 0));
+
+        // ---- H: 승강장 장치 의장 진열 (디자인 변경기로 바꿀 수 있는 것들)
+        for (int xx = -22; xx <= 0; xx++) for (int y = Y0; y <= Y0 + 3; y++) set(l, xx, y, 32, Blocks.SMOOTH_QUARTZ.defaultBlockState());
+        for (int xx = -24; xx <= 2; xx++) for (int z = 33; z <= 39; z++) set(l, xx, Y0 - 1, z, Blocks.POLISHED_ANDESITE.defaultBlockState());
+        Object[][] var = {
+                {ModRegistry.HALL_BUTTON.get(), 4, 1}, {ModRegistry.INDICATOR_SEGMENT.get(), 4, 2}, {ModRegistry.INDICATOR_DOT.get(), 4, 1},
+                {ModRegistry.INDICATOR_LCD.get(), 3, 2}, {ModRegistry.HALL_LANTERN.get(), 3, 1}};
+        int vx = -21;
+        for (Object[] v : var) {
+            for (int k = 0; k < (Integer) v[1]; k++) {
+                device(l, p, a, (Block) v[0], vx, Y0 + (Integer) v[2], 33);
+                if (l.getBlockEntity(new BlockPos(vx, Y0 + (Integer) v[2], 33)) instanceof DeviceBlockEntity de) de.setDesign(k);
+                vx++;
+            }
+            vx++;
+        }
+        SHOTS.add(new Shot("21_designs_left", -16.5, Y0, 36.2, 180, 8, ac, 0f, 0));
+        SHOTS.add(new Shot("22_designs_right", -6.0, Y0, 36.2, 180, 8, ac, 0f, 0));
+
         // ---- C: 승강장 장치 진열 벽
         for (int xx = -16; xx <= -2; xx++) for (int y = Y0; y <= Y0 + 3; y++) set(l, xx, y, 20, Blocks.SMOOTH_QUARTZ.defaultBlockState());
         for (int xx = -18; xx <= 0; xx++) for (int z = 21; z <= 26; z++) set(l, xx, Y0 - 1, z, Blocks.POLISHED_ANDESITE.defaultBlockState());
@@ -176,7 +225,7 @@ public final class PhotoScenes {
         ServerPlayer p = server.getPlayerList().getPlayers().get(0);
         if (s.ctrl() != null && l.getBlockEntity(s.ctrl()) instanceof ControllerBlockEntity c) {
             c.photoFreeze(l, s.door(), s.pathS());
-            if (s.name().startsWith("20")) c.dir = 1;
+            if (s.name().startsWith("2")) c.dir = 1;
         }
         p.teleportTo(l, s.x(), s.y(), s.z(), s.yaw(), s.pitch());
     }

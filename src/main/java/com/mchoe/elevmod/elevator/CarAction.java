@@ -20,4 +20,8 @@ public final class CarAction {
     public static final int HOLD = 14;          // 화물용 홀드
     public static final int STOP_SWITCH = 15;   // 구형 비상정지 버튼
     public static final int ACCESSIBLE_FLOOR = 16; // 장애인용 운전반 층 버튼 (문 열림 시간 연장)
+    public static final int DESIGN = 17;        // 디자인 변경기: arg = 부위 * 2 + (뒤로 1)
+
+    /** 디자인 변경 부위 */
+    public static final int PART_WALL = 0, PART_FLOOR = 1, PART_CEILING = 2, PART_COP = 3, PART_ACC = 4, PART_INDICATOR = 5, PART_DOOR = 6, PART_HANDRAIL = 7;
 }

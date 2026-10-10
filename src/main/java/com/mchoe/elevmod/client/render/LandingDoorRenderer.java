@@ -9,6 +9,12 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 
+import com.mchoe.elevmod.client.ClientEvents;
+import com.mchoe.elevmod.entity.ElevatorCarEntity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
+
 import java.util.List;
 
 /**
@@ -28,7 +34,7 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
         ps.pushPose();
         ps.translate(0.5, 0, 0.5);
         ps.mulPose(Axis.YP.rotationDegrees(-be.facing().toYRot()));
-        float p = be.anim(pt);
+        float p = progress(be, pt);
         int W = be.w, H = be.h;
         float cw = Math.min(be.clearW, W), chh = Math.min(be.clearH, H);
         Spec.DoorType t = be.type();
@@ -98,6 +104,32 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
             }
         }
         ps.popPose();
+    }
+
+    /**
+     * 실제 엘리베이터는 카 도어의 베인(클러치)이 승강장 문의 롤러를 물고 함께 움직이므로
+     * 카가 이 층에 착상해 있으면 승강장 문은 카 도어와 완전히 같은 위치로 움직인다.
+     * (삼각키로 수동 개방 중이거나 카가 없으면 자체 애니메이션)
+     */
+    static float progress(LandingDoorBlockEntity be, float pt) {
+        float own = be.anim(pt);
+        if (be.ctrl == null || be.manual) return own;
+        BlockPos pos = be.getBlockPos();
+        for (ElevatorCarEntity car : ClientEvents.cars()) {
+            if (car.isRemoved() || car.cCur == null || car.cPrev == null || !be.ctrl.equals(car.controller())) continue;
+            Vec3 o = car.cPrev.lerp(car.cCur, pt);
+            if (Math.abs(o.y - pos.getY()) > 0.35) continue;
+            Direction cf = car.facing();
+            boolean front = be.facing() == cf, rear = be.facing() == cf.getOpposite();
+            if (!front && !rear) continue;
+            // 문 평면과 카 중심 사이 거리(정면 방향) – 같은 승강로인지 확인
+            double along = (pos.getX() + 0.5 - o.x) * cf.getStepX() + (pos.getZ() + 0.5 - o.z) * cf.getStepZ();
+            if (Math.abs(along) > car.carD() / 2 + 1.6) continue;
+            boolean open = front ? car.state().getBoolean("fo2") : car.state().getBoolean("ro2");
+            if (!open) return own;
+            return car.doorPrev + (car.doorCur - car.doorPrev) * pt;
+        }
+        return own;
     }
 
     @Override

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "tools",
+  "ingredients": [
+    {"item": "minecraft:book"},
+    {"item": "minecraft:red_dye"},
+    {"item": "minecraft:yellow_dye"},
+    {"item": "minecraft:blue_dye"},
+    {"item": "minecraft:iron_nugget"}
+  ],
+  "result": {"item": "elevmod:design_tool", "count": 1}
+}

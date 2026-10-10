@@ -89,10 +89,45 @@ public final class Spec {
         public String key() { return "elevmod.ceiling." + name().toLowerCase(Locale.ROOT); }
     }
 
-    /** 운전반 위치 / 편개 문 열림 방향 */
+    /** 운전반 위치(카 안에서 문을 바라볼 때 기준) / 편개 문 열림 방향. BOTH = 양쪽 모두 설치 */
     public enum Side {
-        AUTO, LEFT, RIGHT;
+        AUTO, LEFT, RIGHT, BOTH;
         public String key() { return "elevmod.side2." + name().toLowerCase(Locale.ROOT); }
+        public boolean left() { return this == LEFT || this == BOTH; }
+        public boolean right() { return this == RIGHT || this == BOTH; }
+    }
+
+    /** 버튼 의장 (승강장 호출버튼 · 카 운전반 · 장애인 운전반 공용) */
+    public enum ButtonStyle {
+        ROUND,    // 원형 스테인리스 + 링 조명 (현재 국내 표준형)
+        SQUARE,   // 사각 버튼
+        TOUCH,    // 터치식(흑색 강화유리, 정전식)
+        CLASSIC;  // 구형 대형 원형 버튼(황동 테)
+        public String key() { return "elevmod.bstyle." + name().toLowerCase(Locale.ROOT); }
+    }
+
+    /** 위치표시기 소자 */
+    public enum Display {
+        SEGMENT, DOT, LCD;
+        public String key() { return "elevmod.display." + name().toLowerCase(Locale.ROOT); }
+    }
+
+    /** 카 벽 마감 (AUTO = 테마를 따름) */
+    public enum WallFinish {
+        AUTO, HAIRLINE, ETCHED, MIRROR, GOLD, WOOD, WHITE, MARBLE;
+        public String key() { return "elevmod.wall." + name().toLowerCase(Locale.ROOT); }
+    }
+
+    /** 카 바닥 마감 (AUTO = 용도를 따름) */
+    public enum FloorFinish {
+        AUTO, GRANITE, MARBLE, CHECKER, RUBBER, WOOD;
+        public String key() { return "elevmod.floor." + name().toLowerCase(Locale.ROOT); }
+    }
+
+    /** 운전반 층 입력 방식: 층별 버튼 / 텐키(10-KEY, 숫자 조합 입력) */
+    public enum CopKeys {
+        BUTTONS, TENKEY;
+        public String key() { return "elevmod.copkeys." + name().toLowerCase(Locale.ROOT); }
     }
 
     public enum Theme {

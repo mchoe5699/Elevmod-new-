@@ -26,6 +26,11 @@ public class CopScreen extends Screen {
     private final List<Button> floorButtons = new ArrayList<>();
     private int heldAction, tick, lastFloorClick = -1, lastFloorTick;
     private int panelX, panelY, panelW, panelH, floorCount, initMode;
+    private boolean initTenkey, initButtons;
+    /** 텐키 입력 중인 층(가예약층) */
+    private String tkInput = "";
+    private int tkIdle, tkMsgTicks;
+    private String tkMsg = "";
 
     public CopScreen(ElevatorCarEntity car, boolean accessible) {
         super(Component.translatable(accessible ? "elevmod.screen.cop_acc" : "elevmod.screen.cop"));
@@ -48,18 +53,33 @@ public class CopScreen extends Screen {
         ListTag names = st.getList("n", Tag.TAG_STRING);
         floorCount = names.size();
         initMode = st.getInt("mode");
-        int cols = floorCount > 40 ? 8 : floorCount > 20 ? 6 : 4;
-        int bw = 34, bh = 18, gap = 3;
-        int rows = Math.max(1, (floorCount + cols - 1) / cols);
-        panelW = Math.max(220, cols * (bw + gap) + 20);
+        initTenkey = st.getBoolean("tenkey");
+        initButtons = !st.contains("cbtn") || st.getBoolean("cbtn");
+        boolean tenkey = initTenkey && initButtons;
+        int cols = tenkey ? 3 : floorCount > 40 ? 8 : floorCount > 20 ? 6 : 4;
+        int bw = tenkey ? 44 : 34, bh = 18, gap = 3;
+        int shown = !initButtons ? 0 : tenkey ? 15 : floorCount;
+        int rows = Math.max(1, (shown + cols - 1) / cols);
+        panelW = Math.max(tenkey ? 270 : 220, cols * (bw + gap) + 20);
         panelH = 70 + rows * (bh + gap) + 90;
         panelX = (width - panelW) / 2;
         panelY = Math.max(4, (height - panelH) / 2);
-        int gridX = panelX + (panelW - cols * (bw + gap) + gap) / 2;
+        int gridX = tenkey ? panelX + 14 : panelX + (panelW - cols * (bw + gap) + gap) / 2;
         int gridY = panelY + 62;
         Spec.Usage usage = car.usage();
+        if (tenkey) {
+            String[] keys = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "B", "0", "C"};
+            for (int i = 0; i < keys.length; i++) {
+                final String k = keys[i];
+                int r = i / 3, c = i % 3;
+                addRenderableWidget(Button.builder(Component.literal(k.equals("C") ? I18n.get("elevmod.tenkey.clear") : k), b -> tenkey(k))
+                        .bounds(gridX + c * (bw + gap), gridY + r * (bh + gap), bw, bh).build());
+            }
+            addRenderableWidget(Button.builder(Component.translatable("elevmod.tenkey.enter").withStyle(ChatFormatting.AQUA), b -> tenkeyEnter())
+                    .bounds(gridX, gridY + 4 * (bh + gap), 3 * bw + 2 * gap, bh).build());
+        }
         // 층 버튼 – 아래층이 아래에 오도록
-        for (int i = 0; i < floorCount; i++) {
+        for (int i = 0; i < (initButtons && !tenkey ? floorCount : 0); i++) {
             final int idx = i;
             int r = (floorCount - 1 - i) / cols, c = i % cols;
             Button b = Button.builder(Component.literal(names.getString(i)), btn -> pressFloor(idx))
@@ -102,6 +122,51 @@ public class CopScreen extends Screen {
         panelH = Math.max(panelH, y - panelY + ((extra.size() + perRow - 1) / perRow) * 22 + 8);
     }
 
+    /** 텐키 숫자/B/정정 */
+    private void tenkey(String k) {
+        tkIdle = 0;
+        if (k.equals("C")) { if (!tkInput.isEmpty()) tkInput = tkInput.substring(0, tkInput.length() - 1); return; }
+        if (k.equals("B")) { tkInput = tkInput.startsWith("B") ? tkInput : "B" + tkInput; return; }
+        if (tkInput.replace("B", "").length() >= 3) return;
+        tkInput += k;
+    }
+
+    /** 등록: 입력한 층 이름과 같은 층을 찾아 등록(이미 등록된 층이면 취소) */
+    private void tenkeyEnter() {
+        if (tkInput.isEmpty()) return;
+        ListTag names = st().getList("n", Tag.TAG_STRING);
+        int idx = TenKey.match(tkInput, names);
+        if (idx < 0) {
+            tkMsg = I18n.get("elevmod.tenkey.no_floor", tkInput);
+        } else {
+            byte[] calls = st().getByteArray("c");
+            boolean lit = idx < calls.length && (calls[idx] & 1) != 0;
+            if (lit) { send(CarAction.CANCEL, idx); tkMsg = I18n.get("elevmod.tenkey.cancelled", names.getString(idx)); }
+            else { send(accessible ? CarAction.ACCESSIBLE_FLOOR : CarAction.FLOOR, idx); tkMsg = I18n.get("elevmod.tenkey.registered", names.getString(idx)); }
+        }
+        tkMsgTicks = 40;
+        tkInput = "";
+        tkIdle = 0;
+    }
+
+    @Override
+    public boolean charTyped(char ch, int mods) {
+        if (initTenkey && initButtons) {
+            if (ch >= '0' && ch <= '9') { tenkey(String.valueOf(ch)); return true; }
+            if (ch == 'b' || ch == 'B') { tenkey("B"); return true; }
+        }
+        return super.charTyped(ch, mods);
+    }
+
+    @Override
+    public boolean keyPressed(int key, int scan, int mods) {
+        if (initTenkey && initButtons) {
+            if (key == 257 || key == 335) { tenkeyEnter(); return true; }      // Enter
+            if (key == 259) { tenkey("C"); return true; }                      // Backspace
+        }
+        return super.keyPressed(key, scan, mods);
+    }
+
     private void pressFloor(int idx) {
         byte[] calls = st().getByteArray("c");
         boolean lit = idx < calls.length && (calls[idx] & 1) != 0;
@@ -121,7 +186,11 @@ public class CopScreen extends Screen {
         if (car.isRemoved() || minecraft == null || minecraft.player == null || minecraft.player.distanceTo(car) > 8) { onClose(); return; }
         if (heldAction != 0 && tick % 2 == 0) send(heldAction, 0);
         CompoundTag st = st();
-        if (st.getList("n", Tag.TAG_STRING).size() != floorCount || st.getInt("mode") != initMode) { heldAction = 0; rebuildWidgets(); return; }
+        if (st.getList("n", Tag.TAG_STRING).size() != floorCount || st.getInt("mode") != initMode || st.getBoolean("tenkey") != initTenkey
+                || (!st.contains("cbtn") || st.getBoolean("cbtn")) != initButtons) { heldAction = 0; rebuildWidgets(); return; }
+        // 텐키: 일정 시간 추가 입력이 없으면 자동 등록
+        if (!tkInput.isEmpty() && ++tkIdle >= 40) tenkeyEnter();
+        if (tkMsgTicks > 0) tkMsgTicks--;
         byte[] calls = st.getByteArray("c");
         ListTag names = st.getList("n", Tag.TAG_STRING);
         for (int i = 0; i < floorButtons.size(); i++) {
@@ -163,7 +232,26 @@ public class CopScreen extends Screen {
         g.drawString(font, spec, panelX + 10, panelY + 44, 0xFFE0E0E0, false);
         String ser = I18n.get("elevmod.cop.serial", st.getString("let"), st.getString("ser"));
         g.drawString(font, ser, panelX + panelW - 10 - font.width(ser), panelY + 44, 0xFFB0B0B0, false);
-        if (st.getBoolean("dd") && st.getInt("mode") == Spec.Mode.NORMAL.ordinal())
+        if (initTenkey && initButtons) {
+            int gx = panelX + panelW - 10 - 96, gy = panelY + 62;
+            g.fill(gx, gy, gx + 96, gy + 40, 0xFF0A1E3C);
+            g.drawString(font, I18n.get("elevmod.tenkey.input"), gx + 4, gy + 3, 0xFF9FD8FF, false);
+            g.pose().pushPose();
+            g.pose().translate(gx + 6, gy + 15, 0);
+            g.pose().scale(2f, 2f, 1);
+            g.drawString(font, tkInput.isEmpty() ? "_" : tkInput, 0, 0, 0xFFFFFFFF, false);
+            g.pose().popPose();
+            // 예약층(등록된 층)
+            byte[] calls = st.getByteArray("c");
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < n; i++) if (i < calls.length && (calls[i] & 1) != 0) sb.append(names.getString(i)).append(' ');
+            g.fill(gx, gy + 44, gx + 96, gy + 72, 0xFF0A1E3C);
+            g.drawString(font, I18n.get("elevmod.tenkey.reserved"), gx + 4, gy + 47, 0xFF9FD8FF, false);
+            g.drawString(font, sb.length() == 0 ? "-" : sb.toString().trim(), gx + 4, gy + 59, 0xFFFFD040, false);
+            if (tkMsgTicks > 0) g.drawString(font, tkMsg, gx, gy + 78, 0xFFFFFFFF, false);
+            g.drawString(font, I18n.get("elevmod.tenkey.hint"), panelX + 10, panelY + panelH - 10, 0xFFB0B0B0, false);
+        }
+        if (st.getBoolean("dd") && st.getInt("mode") == Spec.Mode.NORMAL.ordinal() && !initButtons)
             g.drawCenteredString(font, I18n.get("elevmod.msg.dd_mode"), width / 2, panelY + panelH + 4, 0xFFFFD040);
         if (car.usage() == Spec.Usage.WHEELCHAIR_LIFT)
             g.drawCenteredString(font, I18n.get("elevmod.cop.lift_hint"), width / 2, panelY + panelH + 4, 0xFFFFD040);

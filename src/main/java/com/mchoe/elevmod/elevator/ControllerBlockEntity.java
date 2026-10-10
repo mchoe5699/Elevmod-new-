@@ -73,7 +73,16 @@ public class ControllerBlockEntity extends BlockEntity {
     public float setW, setD, setH, clearW, clearH;
     public Spec.Jamb jamb = Spec.Jamb.NARROW;
     public Spec.Ceiling ceiling = Spec.Ceiling.PANEL;
-    public Spec.Side copSide = Spec.Side.AUTO, doorHand = Spec.Side.LEFT;
+    public Spec.Side copSide = Spec.Side.AUTO, doorHand = Spec.Side.LEFT, accSide = Spec.Side.AUTO;
+    /** 의장(디자인) – 디자인 변경기 또는 제어반에서 변경 */
+    public Spec.WallFinish wallFinish = Spec.WallFinish.AUTO;
+    public Spec.FloorFinish floorFinish = Spec.FloorFinish.AUTO;
+    public Spec.ButtonStyle copStyle = Spec.ButtonStyle.ROUND, accStyle = Spec.ButtonStyle.ROUND;
+    public Spec.Display carDisplay = Spec.Display.SEGMENT;
+    /** 운전반 층 입력 방식(층별 버튼 / 텐키) */
+    public Spec.CopKeys copKeys = Spec.CopKeys.BUTTONS;
+    /** 행선층 예약(DD) 운전 중에도 카 운전반에 층 버튼을 둘지 */
+    public boolean ddCopButtons = false;
     public String serial = "";
 
     // ------------------------------------------------------------ 구조
@@ -980,8 +989,17 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putBoolean("glass", usage == Spec.Usage.OBSERVATION);
         t.putInt("cab", cabin);
         t.putInt("ceil", ceiling.ordinal());
-        t.putBoolean("rh", rightHand());
+        t.putBoolean("hand", rightHand());
         t.putInt("cops", copSide.ordinal());
+        t.putInt("accs", accSide.ordinal());
+        t.putInt("wallf", wallFinish.ordinal());
+        t.putInt("floorf", floorFinish.ordinal());
+        t.putInt("copst", copStyle.ordinal());
+        t.putInt("accst", accStyle.ordinal());
+        t.putInt("disp", carDisplay.ordinal());
+        t.putBoolean("tenkey", copKeys == Spec.CopKeys.TENKEY);
+        // 운전반에 층 버튼(또는 텐키)이 있는지: 행선층 예약 운전이면 설정에 따름
+        t.putBoolean("cbtn", !destination || ddCopButtons);
         return t;
     }
 
@@ -1107,7 +1125,7 @@ public class ControllerBlockEntity extends BlockEntity {
         hallCall(lvl, floorY, i == 0, null);
     }
 
-    private void registerCarCall(ServerLevel lvl, int idx, Player p) {
+    public void registerCarCall(ServerLevel lvl, int idx, Player p) {
         if (idx < 0 || idx >= floors.size()) return;
         boolean ok = switch (mode) {
             case NORMAL, INDEPENDENT, HOLD, FIRE2, FIRE2B, INSPECTION -> true;
@@ -1117,7 +1135,7 @@ public class ControllerBlockEntity extends BlockEntity {
             p.displayClientMessage(Component.translatable("elevmod.msg.button_disabled").withStyle(ChatFormatting.GRAY), true);
             return;
         }
-        if (destination && mode == Spec.Mode.NORMAL) {
+        if (destination && mode == Spec.Mode.NORMAL && !ddCopButtons) {
             p.displayClientMessage(Component.translatable("elevmod.msg.dd_mode"), true);
             return;
         }
@@ -1141,6 +1159,25 @@ public class ControllerBlockEntity extends BlockEntity {
         switch (action) {
             case CarAction.FLOOR -> registerCarCall(lvl, arg, p);
             case CarAction.ACCESSIBLE_FLOOR -> { accessibleDwell = true; registerCarCall(lvl, arg, p); }
+            case CarAction.DESIGN -> {
+                if (!p.getMainHandItem().is(ModRegistry.DESIGN_TOOL.get()) && !p.getOffhandItem().is(ModRegistry.DESIGN_TOOL.get())) return;
+                int d = (arg & 1) != 0 ? -1 : 1;
+                Component name = switch (arg >> 1) {
+                    case CarAction.PART_WALL -> { wallFinish = cycle(Spec.WallFinish.values(), wallFinish, d); yield Component.translatable(wallFinish.key()); }
+                    case CarAction.PART_FLOOR -> { floorFinish = cycle(Spec.FloorFinish.values(), floorFinish, d); yield Component.translatable(floorFinish.key()); }
+                    case CarAction.PART_CEILING -> { ceiling = cycle(Spec.Ceiling.values(), ceiling, d); yield Component.translatable(ceiling.key()); }
+                    case CarAction.PART_COP -> { copStyle = cycle(Spec.ButtonStyle.values(), copStyle, d); yield Component.translatable(copStyle.key()); }
+                    case CarAction.PART_ACC -> { accStyle = cycle(Spec.ButtonStyle.values(), accStyle, d); yield Component.translatable(accStyle.key()); }
+                    case CarAction.PART_INDICATOR -> { carDisplay = cycle(Spec.Display.values(), carDisplay, d); yield Component.translatable(carDisplay.key()); }
+                    case CarAction.PART_DOOR -> { theme = cycle(Spec.Theme.values(), theme, d); refreshDoors(lvl); yield Component.translatable(theme.key()); }
+                    default -> null;
+                };
+                if (name == null) return;
+                p.displayClientMessage(Component.translatable("elevmod.msg.design", Component.translatable("elevmod.part." + (arg >> 1)), name).withStyle(ChatFormatting.AQUA), true);
+                lvl.playSound(null, p.blockPosition(), SoundEvents.ITEM_FRAME_ROTATE_ITEM, SoundSource.PLAYERS, 0.6f, 1.2f);
+                setChanged();
+                displayHash++;
+            }
             case CarAction.CANCEL -> {
                 if (arg >= 0 && arg < carCalls.length && carCalls[arg]) {
                     carCalls[arg] = false;
@@ -1604,6 +1641,14 @@ public class ControllerBlockEntity extends BlockEntity {
             case "ceiling" -> ceiling = cycle(Spec.Ceiling.values(), ceiling, delta);
             case "copside" -> copSide = cycle(Spec.Side.values(), copSide, delta);
             case "hand" -> doorHand = doorHand == Spec.Side.RIGHT ? Spec.Side.LEFT : Spec.Side.RIGHT;
+            case "accside" -> accSide = cycle(Spec.Side.values(), accSide, delta);
+            case "wallf" -> wallFinish = cycle(Spec.WallFinish.values(), wallFinish, delta);
+            case "floorf" -> floorFinish = cycle(Spec.FloorFinish.values(), floorFinish, delta);
+            case "copst" -> copStyle = cycle(Spec.ButtonStyle.values(), copStyle, delta);
+            case "accst" -> accStyle = cycle(Spec.ButtonStyle.values(), accStyle, delta);
+            case "disp" -> carDisplay = cycle(Spec.Display.values(), carDisplay, delta);
+            case "copkeys" -> copKeys = cycle(Spec.CopKeys.values(), copKeys, delta);
+            case "ddbtn" -> ddCopButtons = !ddCopButtons;
             case "return" -> returnSec = Math.floorMod(returnSec + delta * 15, 315);
             case "beep" -> beep = !beep;
             case "fourf" -> fourAsF = !fourAsF;
@@ -1789,6 +1834,11 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putFloat("clearW", clearW); t.putFloat("clearH", clearH);
         t.putInt("jamb", jamb.ordinal()); t.putInt("ceiling", ceiling.ordinal());
         t.putInt("copSide", copSide.ordinal()); t.putInt("doorHand", doorHand.ordinal());
+        t.putInt("accSide", accSide.ordinal());
+        t.putInt("wallFinish", wallFinish.ordinal()); t.putInt("floorFinish", floorFinish.ordinal());
+        t.putInt("copStyle", copStyle.ordinal()); t.putInt("accStyle", accStyle.ordinal());
+        t.putInt("carDisplay", carDisplay.ordinal()); t.putInt("copKeys", copKeys.ordinal());
+        t.putBoolean("ddCopButtons", ddCopButtons);
     }
 
     private void loadSettings(CompoundTag t) {
@@ -1827,6 +1877,15 @@ public class ControllerBlockEntity extends BlockEntity {
         ceiling = en(Spec.Ceiling.values(), t.getInt("ceiling"));
         copSide = en(Spec.Side.values(), t.getInt("copSide"));
         doorHand = t.contains("doorHand") ? en(Spec.Side.values(), t.getInt("doorHand")) : Spec.Side.LEFT;
+        if (doorHand != Spec.Side.RIGHT) doorHand = Spec.Side.LEFT;
+        accSide = en(Spec.Side.values(), t.getInt("accSide"));
+        wallFinish = en(Spec.WallFinish.values(), t.getInt("wallFinish"));
+        floorFinish = en(Spec.FloorFinish.values(), t.getInt("floorFinish"));
+        copStyle = en(Spec.ButtonStyle.values(), t.getInt("copStyle"));
+        accStyle = en(Spec.ButtonStyle.values(), t.getInt("accStyle"));
+        carDisplay = en(Spec.Display.values(), t.getInt("carDisplay"));
+        copKeys = en(Spec.CopKeys.values(), t.getInt("copKeys"));
+        ddCopButtons = t.getBoolean("ddCopButtons");
     }
 
     private static <E extends Enum<E>> E en(E[] vals, int i) { return vals[Math.max(0, Math.min(i, vals.length - 1))]; }

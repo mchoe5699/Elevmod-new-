@@ -170,4 +170,24 @@ public class ElevatorGameTests {
                 })
                 .thenSucceed();
     }
+
+    /** 행선층 예약(DD) 운전: 카 층버튼 없음 설정이면 카 호출이 무시되고, 층버튼 있음 설정이면 카 안에서도 등록된다 */
+    @GameTest(template = "empty", timeoutTicks = 800)
+    public static void destinationCarButtonsOption(GameTestHelper h) {
+        ControllerBlockEntity c = build(h, 4, 0);
+        ServerLevel lvl = h.getLevel();
+        Player p = h.makeMockPlayer();
+        c.destination = true;
+        c.ddCopButtons = false;
+        h.startSequence()
+                .thenExecuteAfter(3, () -> {
+                    c.registerCarCall(lvl, 2, p);
+                    h.assertTrue(!c.carCalls[2], "DD + 층버튼 없음: 카 호출 무시");
+                    c.ddCopButtons = true;
+                    c.registerCarCall(lvl, 2, p);
+                    h.assertTrue(c.carCalls[2], "DD + 층버튼 있음: 카 호출 등록");
+                })
+                .thenWaitUntil(() -> h.assertTrue(doorsOpenAt(c, 2), "등록한 층으로 운행"))
+                .thenSucceed();
+    }
 }

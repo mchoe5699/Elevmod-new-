@@ -27,7 +27,42 @@ public class DeviceBlockEntity extends BlockEntity {
     public boolean moving, lanUp, lanDown, lanAny, upLit, downLit, hasUp = true, hasDown = true, dumbwaiter;
     public final List<String> names = new ArrayList<>();
     public boolean redstoneLast;
+    /** 의장 번호 (종류별 의미는 designKey 참고) */
+    public int design;
     private int hash;
+
+    /** 종류별 의장 개수 */
+    public static int designCount(DeviceBlock.Kind k) {
+        return switch (k) {
+            case HALL_BUTTON, HALL_PANEL -> 4;               // 원형 / 사각 / 터치 / 구형
+            case IND_SEGMENT, IND_DOT -> 4;                  // 색상 4종
+            case IND_LCD -> 3;                               // 청색 / 흑색 / 백색
+            case IND_LAMP -> 2;                              // 호박색 / 백색 유리
+            case LANTERN -> 3;                               // 삼각 렌즈 / 원형 / 세로 바
+            case DESTINATION -> 2;                           // 짙은 / 밝은
+            default -> 1;
+        };
+    }
+
+    public static String designKey(DeviceBlock.Kind k, int d) {
+        String g = switch (k) {
+            case HALL_BUTTON, HALL_PANEL -> "bstyle." + com.mchoe.elevmod.elevator.Spec.ButtonStyle.values()[Math.min(d, 3)].name().toLowerCase(java.util.Locale.ROOT);
+            case IND_SEGMENT -> "dcolor.seg" + d;
+            case IND_DOT -> "dcolor.dot" + d;
+            case IND_LCD -> "dcolor.lcd" + d;
+            case IND_LAMP -> "dcolor.lamp" + d;
+            case LANTERN -> "dcolor.lantern" + d;
+            case DESTINATION -> "dcolor.dest" + d;
+            default -> "design.default";
+        };
+        return "elevmod." + g;
+    }
+
+    public void setDesign(int d) {
+        design = d;
+        hash = 0;
+        sync();
+    }
 
     public DeviceBlockEntity(BlockPos pos, BlockState state) {
         super(ModRegistry.DEVICE_BE.get(), pos, state);
@@ -81,6 +116,7 @@ public class DeviceBlockEntity extends BlockEntity {
         int flags = (moving ? 1 : 0) | (lanUp ? 2 : 0) | (lanDown ? 4 : 0) | (lanAny ? 8 : 0) | (upLit ? 16 : 0) | (downLit ? 32 : 0)
                 | (hasUp ? 64 : 0) | (hasDown ? 128 : 0) | (dumbwaiter ? 256 : 0) | (redstoneLast ? 512 : 0);
         t.putInt("fl", flags);
+        t.putInt("design", design);
         ListTag l = new ListTag();
         for (String n : names) l.add(StringTag.valueOf(n));
         t.put("names", l);
@@ -100,6 +136,7 @@ public class DeviceBlockEntity extends BlockEntity {
         moving = (f & 1) != 0; lanUp = (f & 2) != 0; lanDown = (f & 4) != 0; lanAny = (f & 8) != 0;
         upLit = (f & 16) != 0; downLit = (f & 32) != 0; hasUp = (f & 64) != 0; hasDown = (f & 128) != 0;
         dumbwaiter = (f & 256) != 0; redstoneLast = (f & 512) != 0;
+        design = t.getInt("design");
         names.clear();
         ListTag l = t.getList("names", Tag.TAG_STRING);
         for (Tag x : l) names.add(x.getAsString());

@@ -30,7 +30,11 @@ public class LandingDoorBlockEntity extends BlockEntity {
     public int jamb = 0;
     public float clearW = 0.9f, clearH = 0.95f;
     public float target, speed = 0.025f;
+    /** 디자인 변경기로 지정한 이 층 문 마감/쟘 (-1 = 제어반 설정을 따름) */
+    public int finish = -1, jambOverride = -1;
     public int manualTicks;
+    /** 삼각키로 수동 개방 중 (카 도어와 무관하게 움직임) */
+    public boolean manual;
     // 클라이언트 애니메이션
     public float animPrev, anim;
 
@@ -42,7 +46,23 @@ public class LandingDoorBlockEntity extends BlockEntity {
 
     public Spec.DoorType type() { Spec.DoorType[] v = Spec.DoorType.values(); return v[Math.max(0, Math.min(doorType, v.length - 1))]; }
 
-    public Spec.Theme themeE() { Spec.Theme[] v = Spec.Theme.values(); return v[Math.max(0, Math.min(theme, v.length - 1))]; }
+    public Spec.Theme themeE() {
+        Spec.Theme[] v = Spec.Theme.values();
+        int t = finish >= 0 ? finish : theme;
+        return v[Math.max(0, Math.min(t, v.length - 1))];
+    }
+
+    public void cycleFinish() {
+        finish++;
+        if (finish >= Spec.Theme.values().length) finish = -1;
+        sync();
+    }
+
+    public void cycleJambOverride() {
+        jambOverride++;
+        if (jambOverride >= Spec.Jamb.values().length) jambOverride = -1;
+        sync();
+    }
 
     public BlockPos masterPos() {
         Direction a = facing().getCounterClockWise();
@@ -61,7 +81,7 @@ public class LandingDoorBlockEntity extends BlockEntity {
         sync();
     }
 
-    public Spec.Jamb jambE() { Spec.Jamb[] v = Spec.Jamb.values(); return v[Math.max(0, Math.min(jamb, v.length - 1))]; }
+    public Spec.Jamb jambE() { Spec.Jamb[] v = Spec.Jamb.values(); int j = jambOverride >= 0 ? jambOverride : jamb; return v[Math.max(0, Math.min(j, v.length - 1))]; }
 
     public void unlink() {
         ctrl = null; master = true; col = 0; row = 0; w = 1; h = 1; target = 0; clearW = 0.9f; clearH = 0.95f;
@@ -86,6 +106,7 @@ public class LandingDoorBlockEntity extends BlockEntity {
         Direction a = facing().getCounterClockWise();
         for (int i = 0; i < mb.w; i++) for (int j = 0; j < mb.h; j++) LandingDoorBlock.setOpen(sl, m.relative(a, i).above(j), true);
         mb.manualTicks = 100;
+        mb.manual = true;
         mb.command(true, 0.03f);
         sl.playSound(null, worldPosition, SoundEvents.IRON_DOOR_OPEN, SoundSource.BLOCKS, 0.8f, 0.7f);
         if (sl.getBlockEntity(ctrl) instanceof ControllerBlockEntity c) {
@@ -104,6 +125,7 @@ public class LandingDoorBlockEntity extends BlockEntity {
             return;
         }
         if (be.manualTicks > 0 && --be.manualTicks == 0) {
+            be.manual = false;
             be.command(false, 0.03f);
             Direction a = be.facing().getCounterClockWise();
             boolean carHere = false;
@@ -137,6 +159,8 @@ public class LandingDoorBlockEntity extends BlockEntity {
         t.putInt("type", doorType); t.putInt("theme", theme); t.putBoolean("win", window);
         t.putInt("jamb", jamb); t.putBoolean("rh", rightHand); t.putFloat("cw", clearW); t.putFloat("ch", clearH);
         t.putFloat("target", target); t.putFloat("speed", speed);
+        t.putInt("finish", finish); t.putInt("jambO", jambOverride);
+        t.putBoolean("manual", manual);
     }
 
     @Override
@@ -152,6 +176,9 @@ public class LandingDoorBlockEntity extends BlockEntity {
         clearH = t.contains("ch") ? t.getFloat("ch") : h - 0.05f;
         target = t.getFloat("target");
         speed = t.contains("speed") ? t.getFloat("speed") : 0.025f;
+        finish = t.contains("finish") ? t.getInt("finish") : -1;
+        manual = t.getBoolean("manual");
+        jambOverride = t.contains("jambO") ? t.getInt("jambO") : -1;
     }
 
     @Override
