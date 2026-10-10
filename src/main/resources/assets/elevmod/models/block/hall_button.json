@@ -1,0 +1,41 @@
+{
+  "parent": "block/block",
+  "textures": {
+    "particle": "elevmod:block/button_panel",
+    "t": "elevmod:block/button_panel"
+  },
+  "elements": [
+    {
+      "from": [
+        5,
+        3,
+        14.5
+      ],
+      "to": [
+        11,
+        13,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#t"
+        },
+        "south": {
+          "texture": "#t"
+        },
+        "east": {
+          "texture": "#t"
+        },
+        "west": {
+          "texture": "#t"
+        },
+        "up": {
+          "texture": "#t"
+        },
+        "down": {
+          "texture": "#t"
+        }
+      }
+    }
+  ]
+}

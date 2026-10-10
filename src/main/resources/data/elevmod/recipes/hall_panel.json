@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "redstone",
+  "ingredients": [
+    {
+      "item": "elevmod:hall_button"
+    },
+    {
+      "item": "elevmod:indicator_dot"
+    }
+  ],
+  "result": {
+    "item": "elevmod:hall_panel",
+    "count": 1
+  }
+}

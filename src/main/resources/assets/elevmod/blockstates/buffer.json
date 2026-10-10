@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "elevmod:block/buffer",
+      "y": 0
+    },
+    "facing=east": {
+      "model": "elevmod:block/buffer",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "elevmod:block/buffer",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "elevmod:block/buffer",
+      "y": 270
+    }
+  }
+}

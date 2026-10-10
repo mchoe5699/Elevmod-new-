@@ -1,0 +1,23 @@
+{
+  "replace": false,
+  "values": [
+    "elevmod:controller",
+    "elevmod:landing_door",
+    "elevmod:hall_button",
+    "elevmod:hall_panel",
+    "elevmod:indicator_segment",
+    "elevmod:indicator_dot",
+    "elevmod:indicator_lcd",
+    "elevmod:indicator_lamp",
+    "elevmod:hall_lantern",
+    "elevmod:fire_switch",
+    "elevmod:destination_panel",
+    "elevmod:call_receiver",
+    "elevmod:machine_geared",
+    "elevmod:machine_gearless",
+    "elevmod:governor",
+    "elevmod:hydraulic_unit",
+    "elevmod:buffer",
+    "elevmod:guide_rail"
+  ]
+}

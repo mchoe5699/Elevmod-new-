@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "elevmod:block/machine_geared",
+      "y": 0
+    },
+    "facing=east": {
+      "model": "elevmod:block/machine_geared",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "elevmod:block/machine_geared",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "elevmod:block/machine_geared",
+      "y": 270
+    }
+  }
+}

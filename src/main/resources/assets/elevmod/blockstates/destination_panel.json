@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "elevmod:block/destination_panel",
+      "y": 0
+    },
+    "facing=east": {
+      "model": "elevmod:block/destination_panel",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "elevmod:block/destination_panel",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "elevmod:block/destination_panel",
+      "y": 270
+    }
+  }
+}

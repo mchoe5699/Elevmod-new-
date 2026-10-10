@@ -1,0 +1,8 @@
+{
+  "parent": "block/orientable",
+  "textures": {
+    "top": "elevmod:block/controller_top",
+    "front": "elevmod:block/controller_front",
+    "side": "elevmod:block/controller_side"
+  }
+}

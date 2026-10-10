@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "elevmod:block/governor",
+      "y": 0
+    },
+    "facing=east": {
+      "model": "elevmod:block/governor",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "elevmod:block/governor",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "elevmod:block/governor",
+      "y": 270
+    }
+  }
+}
