@@ -44,7 +44,7 @@ public final class Photo {
     private void guessTarget() {
         String f = file.toLowerCase(java.util.Locale.ROOT);
         if (f.contains("acc") || f.contains("장애")) target = Target.COP_ACC;
-        else if (f.contains("cop") || f.contains("운전반")) target = Target.COP;
+        else if (f.contains("cop") || f.contains("operating") || f.contains("운전반") || f.contains("car_panel")) target = Target.COP;
         else if (f.contains("lantern") || f.contains("랜턴")) target = Target.LANTERN;
         else if (f.contains("panel") || f.contains("패널")) target = Target.HALL_PANEL;
         else if (f.contains("call") || f.contains("호출") || f.contains("콜")) target = Target.HALL_BUTTON;

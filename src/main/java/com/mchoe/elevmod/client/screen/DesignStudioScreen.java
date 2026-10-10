@@ -120,8 +120,9 @@ public class DesignStudioScreen extends Screen {
                 }).bounds(rx, ry, 128, 18).build());
                 ry += 20;
             }
-            addRenderableWidget(Button.builder(Component.translatable("elevmod.studio.rotate"), b -> { p.rotate(); rebuildWidgets(); }).bounds(rx, ry, 62, 18).build());
-            addRenderableWidget(Button.builder(Component.translatable("elevmod.studio.reset"), b -> { p.resetCorners(); }).bounds(rx + 66, ry, 62, 18).build());
+            addRenderableWidget(Button.builder(Component.translatable("elevmod.studio.rotate"), b -> { p.rotate(); rebuildWidgets(); }).bounds(rx, ry, 128, 18).build());
+            ry += 20;
+            addRenderableWidget(Button.builder(Component.translatable("elevmod.studio.reset"), b -> { p.resetCorners(); }).bounds(rx, ry, 128, 18).build());
             ry += 20;
             addRenderableWidget(Button.builder(Component.translatable(showAnalysis ? "elevmod.studio.analysis_on" : "elevmod.studio.analysis_off"), b -> {
                 showAnalysis = !showAnalysis;
