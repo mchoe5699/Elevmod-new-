@@ -719,7 +719,7 @@ public class ControllerBlockEntity extends BlockEntity {
         }
     }
 
-    private boolean atFloorPos() { return Math.abs(floorS[nearestIdx(s)] - s) < 0.03; }
+    public boolean atFloorPos() { return Math.abs(floorS[nearestIdx(s)] - s) < 0.03; }
 
     private int floorAbove() { for (int i = 0; i < floorS.length; i++) if (floorS[i] > s + 0.01) return i; return -1; }
 
@@ -1594,17 +1594,8 @@ public class ControllerBlockEntity extends BlockEntity {
             case "mode_quake" -> setMode(lvl, mode == Spec.Mode.EARTHQUAKE ? Spec.Mode.NORMAL : Spec.Mode.EARTHQUAKE);
             case "mode_fire" -> fireService(lvl, !mode.fire(), fireY == Integer.MIN_VALUE ? (floors.isEmpty() ? 0 : floors.get(lobbyIdx()).y) : fireY);
             case "power" -> setPower(lvl, !powerOff);
-            case "sim_rope" -> {
-                if (fault == Spec.Fault.NONE && !powerOff && !floors.isEmpty()) {
-                    landingTarget(lvl, cur, false); landingSolid(lvl, cur, true); doorPos = 0;
-                    simRope = true; freeFall = true; govTripped = false; state = State.MOVING; target = -1;
-                    log(lvl, "elevmod.log.rope_break");
-                    playAt(lvl, carPos(), SoundEvents.CHAIN_BREAK, 1f, 0.6f);
-                }
-            }
-            case "sim_brake" -> {
-                if (fault == Spec.Fault.NONE && !powerOff) { simBrake = true; log(lvl, "elevmod.log.brake_fail"); p.displayClientMessage(Component.translatable("elevmod.msg.sim_brake"), true); }
-            }
+            case "sim_rope" -> simulateRopeBreak(lvl);
+            case "sim_brake" -> { if (simulateBrakeFailure(lvl)) p.displayClientMessage(Component.translatable("elevmod.msg.sim_brake"), true); }
             case "reset" -> resetFault(lvl);
             case "rescue" -> manualRescue(lvl, p);
             case "inspect" -> { lastInspect = lvl.getDayTime() / 24000L; log(lvl, "elevmod.log.inspection"); }
@@ -1620,6 +1611,24 @@ public class ControllerBlockEntity extends BlockEntity {
         setChanged();
         displayHash++;
         com.mchoe.elevmod.network.Net.sendController(p, this, false);
+    }
+
+    /** 시험: 주로프 절단 → 낙하 → 조속기 → 비상정지장치 */
+    public boolean simulateRopeBreak(ServerLevel lvl) {
+        if (fault != Spec.Fault.NONE || powerOff || floors.isEmpty() || usage == Spec.Usage.PATERNOSTER) return false;
+        landingTarget(lvl, cur, false); landingSolid(lvl, cur, true); doorPos = 0;
+        simRope = true; freeFall = true; govTripped = false; state = State.MOVING; target = -1;
+        log(lvl, "elevmod.log.rope_break");
+        playAt(lvl, carPos(), SoundEvents.CHAIN_BREAK, 1f, 0.6f);
+        return true;
+    }
+
+    /** 시험: 브레이크 고장 → 다음 개문 정차 중 이상 이동(UCM) → 로프브레이크 */
+    public boolean simulateBrakeFailure(ServerLevel lvl) {
+        if (fault != Spec.Fault.NONE || powerOff || usage == Spec.Usage.PATERNOSTER) return false;
+        simBrake = true;
+        log(lvl, "elevmod.log.brake_fail");
+        return true;
     }
 
     private void applyUsageDefaults() {

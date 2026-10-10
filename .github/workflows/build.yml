@@ -33,6 +33,18 @@ jobs:
         run: |
           grep -E "error:|warning:|What went wrong|Caused by|FAILED" -A2 build.log | head -80 | while IFS= read -r line; do echo "::error::${line}"; done
 
+      - name: Elevator game tests
+        continue-on-error: true
+        run: |
+          mkdir -p run-gametest
+          echo "eula=true" > run-gametest/eula.txt
+          set +e
+          timeout 900 gradle runGameTestServer --no-daemon > gametest.log 2>&1
+          code=$?
+          set -e
+          grep -E "GameTest|gametest|passed|failed|required tests|elevmod" gametest.log | grep -vE "DEBUG|Downloading" | tail -60 | while IFS= read -r line; do echo "::warning::${line}"; done
+          if [ "$code" = "0" ]; then echo "::notice::GAMETESTS_PASSED"; else echo "::error::GAMETESTS_FAILED exit=$code"; grep -iE "exception|error|assert" -A2 gametest.log | head -40 | while IFS= read -r line; do echo "::error::${line}"; done; fi
+
       - name: Dedicated server boot test
         continue-on-error: true
         run: |

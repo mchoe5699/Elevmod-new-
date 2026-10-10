@@ -28,6 +28,15 @@ minecraft {
                 }
             }
         }
+        gameTestServer {
+            workingDirectory project.file('run-gametest')
+            property 'forge.enabledGameTestNamespaces', mod_id
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
         server {
             workingDirectory project.file('run')
             args '--nogui'
