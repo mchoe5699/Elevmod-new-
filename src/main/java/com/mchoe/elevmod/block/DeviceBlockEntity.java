@@ -32,6 +32,28 @@ public class DeviceBlockEntity extends BlockEntity {
     /** 제어반이 지정한 커스텀 디자인 id, 이 장치만의 선택("" = 제어반 따름, "-" = 기본 디자인 고정, 그 외 = 디자인 id) */
     public String ctrlDesign = "", customSel = "";
 
+    /** 제어반의 표시기 설정(동작·모양·색) */
+    public CompoundTag indTag = new CompoundTag();
+    private com.mchoe.elevmod.elevator.IndicatorProfile profCache;
+    private CompoundTag profCacheTag;
+
+    /** 촬영(진열)용: 제어반 설정 대신 이 장치만의 표시기 설정을 유지 (저장 안 함) */
+    public boolean lockInd;
+
+    public void forceIndTag(CompoundTag t) { lockInd = false; setIndTag(t); lockInd = true; }
+
+    public void setIndTag(CompoundTag t) {
+        if (lockInd || t.equals(indTag)) return;
+        indTag = t;
+        hash = 0;
+        sync();
+    }
+
+    public com.mchoe.elevmod.elevator.IndicatorProfile profile() {
+        if (profCache == null || profCacheTag != indTag) { profCache = com.mchoe.elevmod.elevator.IndicatorProfile.load(indTag); profCacheTag = indTag; }
+        return profCache;
+    }
+
     /** 실제로 쓸 커스텀 디자인 id ("" = 기본 디자인) */
     public String effectiveDesign() { return customSel.equals("-") ? "" : !customSel.isEmpty() ? customSel : ctrlDesign; }
 
@@ -148,8 +170,10 @@ public class DeviceBlockEntity extends BlockEntity {
         t.putInt("fl", flags);
         t.putInt("design", design);
         t.putString("cdes", ctrlDesign); t.putString("csel", customSel);
+        t.put("ind", indTag);
         t.putInt("offX", offX); t.putInt("offY", offY);
         t.putLong("origin", worldPosition.asLong());
+        t.putFloat("yaw", yaw);
         ListTag l = new ListTag();
         for (String n : names) l.add(StringTag.valueOf(n));
         t.put("names", l);
@@ -158,6 +182,7 @@ public class DeviceBlockEntity extends BlockEntity {
     @Override
     public void load(CompoundTag t) {
         super.load(t);
+        yaw = t.getFloat("yaw");
         ctrl = t.contains("ctrl") ? BlockPos.of(t.getLong("ctrl")) : null;
         floorY = t.getInt("fy");
         text = t.getString("text");
@@ -171,6 +196,7 @@ public class DeviceBlockEntity extends BlockEntity {
         dumbwaiter = (f & 256) != 0; redstoneLast = (f & 512) != 0;
         design = t.getInt("design");
         ctrlDesign = t.getString("cdes"); customSel = t.getString("csel");
+        indTag = t.getCompound("ind");
         offX = t.getInt("offX"); offY = t.getInt("offY");
         if (t.contains("origin")) {
             BlockPos o = BlockPos.of(t.getLong("origin"));
@@ -187,6 +213,15 @@ public class DeviceBlockEntity extends BlockEntity {
 
     @Override
     public net.minecraft.world.phys.AABB getRenderBoundingBox() { return new net.minecraft.world.phys.AABB(worldPosition).inflate(1.2); }
+
+    /** Ctrl + / - 로 돌린 각도(도, 세로축) */
+    public float yaw;
+
+    public void setYaw(float y) {
+        yaw = y;
+        setChanged();
+        if (level != null && !level.isClientSide) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+    }
 
     /** 복사로 좌표가 옮겨졌으면 새 좌표가 저장되도록 표시 */
     private boolean moved;

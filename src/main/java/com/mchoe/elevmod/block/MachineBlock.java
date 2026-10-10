@@ -32,6 +32,8 @@ public class MachineBlock extends BaseEntityBlock {
     public enum Kind { GEARED, GEARLESS, GOVERNOR, HYDRAULIC }
 
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
+    /** 1° 단위로 돌려 놓았으면 블록 모델 대신 블록엔티티 렌더러가 돌려서 그림 */
+    public static final net.minecraft.world.level.block.state.properties.BooleanProperty ROTATED = net.minecraft.world.level.block.state.properties.BooleanProperty.create("rotated");
     public final Kind kind;
     private static final VoxelShape FULL = Block.box(0, 0, 0, 16, 14, 16);
     private static final VoxelShape GOV = Block.box(3, 0, 3, 13, 14, 13);
@@ -39,11 +41,11 @@ public class MachineBlock extends BaseEntityBlock {
     public MachineBlock(Properties p, Kind kind) {
         super(p);
         this.kind = kind;
-        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
+        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(ROTATED, false));
     }
 
     @Override
-    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> b) { b.add(FACING); }
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> b) { b.add(FACING, ROTATED); }
 
     @Nullable
     @Override

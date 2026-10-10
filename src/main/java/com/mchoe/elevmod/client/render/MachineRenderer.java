@@ -15,10 +15,14 @@ public class MachineRenderer implements BlockEntityRenderer<MachineBlockEntity> 
 
     @Override
     public void render(MachineBlockEntity be, float pt, PoseStack ps, MultiBufferSource buf, int light, int overlay) {
-        if (!(be.getBlockState().getBlock() instanceof MachineBlock mb) || mb.kind == MachineBlock.Kind.HYDRAULIC) return;
+        if (!(be.getBlockState().getBlock() instanceof MachineBlock mb)) return;
+        boolean rotated = be.getBlockState().getValue(MachineBlock.ROTATED);
+        if (rotated) ControllerRenderer.renderRotated(be.getBlockState().setValue(MachineBlock.ROTATED, false), be.yaw, ps, buf, light, overlay);
+        if (mb.kind == MachineBlock.Kind.HYDRAULIC) return;
         float angle = be.anglePrev + (be.angle - be.anglePrev) * pt;
         ps.pushPose();
         ps.translate(0.5, 0, 0.5);
+        if (rotated) ps.mulPose(Axis.YP.rotationDegrees(-be.yaw));
         ps.mulPose(Axis.YP.rotationDegrees(-be.getBlockState().getValue(MachineBlock.FACING).toYRot()));
         VertexConsumer vc = RenderUtil.solid(buf, "sheave");
         switch (mb.kind) {

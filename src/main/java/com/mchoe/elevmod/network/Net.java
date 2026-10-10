@@ -26,7 +26,7 @@ import java.util.function.Supplier;
 public final class Net {
     private Net() {}
 
-    private static final String VER = "3";
+    private static final String VER = "4";
     public static final SimpleChannel CH = NetworkRegistry.newSimpleChannel(new ResourceLocation(ElevMod.MODID, "main"), () -> VER, VER::equals, VER::equals);
 
     public static void init() {
@@ -43,6 +43,8 @@ public final class Net {
                 .encoder(ScreenMsg::encode).decoder(ScreenMsg::decode).consumerMainThread(ScreenMsg::handle).add();
         int[] next = {id};
         DesignNet.register(next);
+        AnimNet.register(next);
+        RotateMsg.register(next);
     }
 
     public static void sendController(ServerPlayer p, ControllerBlockEntity c, boolean open) {

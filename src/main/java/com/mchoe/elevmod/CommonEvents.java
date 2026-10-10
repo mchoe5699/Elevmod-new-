@@ -27,6 +27,7 @@ public class CommonEvents {
     @SubscribeEvent
     public void onServerStarting(net.minecraftforge.event.server.ServerStartingEvent e) {
         com.mchoe.elevmod.elevator.DesignStore.load(e.getServer());
+        com.mchoe.elevmod.elevator.AnimStore.load(e.getServer());
         boolean webp;
         try { Class.forName("com.twelvemonkeys.imageio.plugins.webp.WebPImageReaderSpi"); webp = true; } catch (Throwable t) { webp = false; }
         ElevMod.LOG.info("[elevmod] extra image format libraries present: {}", webp);
@@ -35,11 +36,15 @@ public class CommonEvents {
     @SubscribeEvent
     public void onServerStopped(net.minecraftforge.event.server.ServerStoppedEvent e) {
         com.mchoe.elevmod.elevator.DesignStore.clear();
+        com.mchoe.elevmod.elevator.AnimStore.clear();
     }
 
     /** 접속하면 월드의 커스텀 디자인 목록을 보냄 (실제 데이터는 필요할 때 요청) */
     @SubscribeEvent
     public void onLogin(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent e) {
-        if (e.getEntity() instanceof net.minecraft.server.level.ServerPlayer sp) com.mchoe.elevmod.network.DesignNet.sendIndex(sp);
+        if (e.getEntity() instanceof net.minecraft.server.level.ServerPlayer sp) {
+            com.mchoe.elevmod.network.DesignNet.sendIndex(sp);
+            com.mchoe.elevmod.network.AnimNet.send(sp);
+        }
     }
 }

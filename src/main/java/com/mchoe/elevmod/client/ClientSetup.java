@@ -21,5 +21,6 @@ public final class ClientSetup {
         e.registerBlockEntityRenderer(ModRegistry.LANDING_DOOR_BE.get(), LandingDoorRenderer::new);
         e.registerBlockEntityRenderer(ModRegistry.DEVICE_BE.get(), DeviceRenderer::new);
         e.registerBlockEntityRenderer(ModRegistry.MACHINE_BE.get(), MachineRenderer::new);
+        e.registerBlockEntityRenderer(ModRegistry.CONTROLLER_BE.get(), com.mchoe.elevmod.client.render.ControllerRenderer::new);
     }
 }

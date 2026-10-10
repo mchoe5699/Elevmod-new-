@@ -110,4 +110,27 @@ public final class ClientEvents {
     public static void loggedOut(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut e) {
         com.mchoe.elevmod.client.design.RemoteDesigns.clear();
     }
+
+    /**
+     * Ctrl + '+' / Ctrl + '-' : 보고 있는 엘리베이터 부품(승강장 장치, 승강장 문, 제어반, 기계)을 1°씩 회전.
+     * Ctrl + Shift 는 15°씩, Ctrl + 0 은 원래 각도로.
+     */
+    @SubscribeEvent
+    public static void key(InputEvent.Key e) {
+        if (e.getAction() == org.lwjgl.glfw.GLFW.GLFW_RELEASE) return;
+        if ((e.getModifiers() & org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL) == 0) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.screen != null || mc.player == null || mc.level == null) return;
+        int k = e.getKey();
+        boolean plus = k == org.lwjgl.glfw.GLFW.GLFW_KEY_EQUAL || k == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ADD;
+        boolean minus = k == org.lwjgl.glfw.GLFW.GLFW_KEY_MINUS || k == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_SUBTRACT;
+        boolean zero = k == org.lwjgl.glfw.GLFW.GLFW_KEY_0 || k == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_0;
+        if (!plus && !minus && !zero) return;
+        if (!(mc.hitResult instanceof net.minecraft.world.phys.BlockHitResult bh) || bh.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) return;
+        var be = mc.level.getBlockEntity(bh.getBlockPos());
+        if (!(be instanceof com.mchoe.elevmod.block.DeviceBlockEntity || be instanceof com.mchoe.elevmod.block.LandingDoorBlockEntity
+                || be instanceof com.mchoe.elevmod.block.MachineBlockEntity || be instanceof com.mchoe.elevmod.elevator.ControllerBlockEntity)) return;
+        float step = (e.getModifiers() & org.lwjgl.glfw.GLFW.GLFW_MOD_SHIFT) != 0 ? 15f : 1f;
+        com.mchoe.elevmod.network.Net.CH.sendToServer(new com.mchoe.elevmod.network.RotateMsg(bh.getBlockPos(), plus ? step : -step, zero));
+    }
 }

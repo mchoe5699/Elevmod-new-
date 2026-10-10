@@ -167,6 +167,14 @@ public final class Glyphs {
         d(' ', ".....", ".....", ".....", ".....", ".....", ".....", ".....");
     }
 
+    /** 5×7 도트 글꼴 한 글자 (없으면 빈칸) */
+    public static String[] dotGlyph(char ch) {
+        if (ch == '▲') ch = '^';
+        else if (ch == '▼') ch = 'v';
+        String[] g = DOT.get(ch == 'v' || ch == '^' ? ch : Character.toUpperCase(ch));
+        return g != null ? g : DOT.get(' ');
+    }
+
     /** 도트 한 글자 폭(5칸) */
     public static float dotWidth(float h) { return h * 5f / 7f; }
 

@@ -17,6 +17,9 @@ public final class ClientHooks {
         if (kind == Net.ScreenMsg.CONTROLLER) {
             if (open) mc.setScreen(new ControllerScreen(pos, data));
             else if (mc.screen instanceof ControllerScreen cs && cs.pos.equals(pos)) cs.update(data);
+            else if (mc.screen instanceof com.mchoe.elevmod.client.screen.IndicatorScreen is && is.pos.equals(pos)) is.update(data);
+            else if (mc.screen instanceof com.mchoe.elevmod.client.screen.DotAnimEditorScreen ae && ae.parent() instanceof com.mchoe.elevmod.client.screen.IndicatorScreen is && is.pos.equals(pos)) is.update(data);
+            else if (mc.screen instanceof com.mchoe.elevmod.client.screen.ColorPickerScreen cp && cp.parent() instanceof com.mchoe.elevmod.client.screen.IndicatorScreen is && is.pos.equals(pos)) is.update(data);
         } else if (kind == Net.ScreenMsg.DESTINATION) {
             mc.setScreen(new DestinationScreen(pos, data));
         }

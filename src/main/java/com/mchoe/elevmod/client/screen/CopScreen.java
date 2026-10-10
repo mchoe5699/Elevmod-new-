@@ -141,7 +141,8 @@ public class CopScreen extends Screen {
         } else {
             byte[] calls = st().getByteArray("c");
             boolean lit = idx < calls.length && (calls[idx] & 1) != 0;
-            if (lit) { send(CarAction.CANCEL, idx); tkMsg = I18n.get("elevmod.tenkey.cancelled", names.getString(idx)); }
+            // 이미 켜진 층: 서버가 취소 설정(눌러야 하는 횟수)에 따라 취소
+            if (lit) { send(accessible ? CarAction.ACCESSIBLE_FLOOR : CarAction.FLOOR, idx); tkMsg = names.getString(idx); }
             else { send(accessible ? CarAction.ACCESSIBLE_FLOOR : CarAction.FLOOR, idx); tkMsg = I18n.get("elevmod.tenkey.registered", names.getString(idx)); }
         }
         tkMsgTicks = 40;
@@ -170,14 +171,10 @@ public class CopScreen extends Screen {
     private void pressFloor(int idx) {
         byte[] calls = st().getByteArray("c");
         boolean lit = idx < calls.length && (calls[idx] & 1) != 0;
-        if (lit && lastFloorClick == idx && tick - lastFloorTick < 15) {
-            send(CarAction.CANCEL, idx); // 두 번 눌러 취소
-            lastFloorClick = -1;
-            return;
-        }
+        // 켜진 버튼을 다시 누르면 서버가 횟수를 세어 취소(제어반 설정)
         lastFloorClick = idx;
         lastFloorTick = tick;
-        if (!lit) send(accessible ? CarAction.ACCESSIBLE_FLOOR : CarAction.FLOOR, idx);
+        send(accessible ? CarAction.ACCESSIBLE_FLOOR : CarAction.FLOOR, idx);
     }
 
     @Override

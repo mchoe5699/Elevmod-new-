@@ -14,34 +14,19 @@ import java.util.List;
 public final class PanelDraw {
     private PanelDraw() {}
 
-    /** 위치표시 창. type: "seg" 7세그먼트, "dot" 도트매트릭스, "lcd" LCD */
+    /** 위치표시 창. type: "seg" 7세그먼트, "dot" 도트매트릭스, "lcd" LCD (프로필·전환 효과 없이) */
     public static void display(PoseStack ps, MultiBufferSource buf, String type, int col, int lcdBg, float x1, float y1, float x2, float y2,
                                float z, int light, String cur, int dir, boolean moving) {
-        float h = y2 - y1, cy = (y1 + y2) / 2, wdt = x2 - x1;
-        float ax = x1 + wdt * 0.17f, tx = x1 + wdt * 0.6f, tw = wdt * 0.7f;
-        switch (type) {
-            case "dot" -> {
-                Glyphs.rect(ps, buf, x1, y1, x2, y2, z, RenderUtil.FULL, 0xFF0C0806);
-                float gh = Math.min(h * 0.74f, tw / Math.max(1, cur.length() * 5f / 7f + (cur.length() - 1) / 7f));
-                float scroll = 0;
-                if (moving && dir != 0 && Minecraft.getInstance().level != null) scroll = (Minecraft.getInstance().level.getGameTime() % 14) / 14f;
-                Glyphs.dots(ps, buf, dir > 0 ? "^" : dir < 0 ? "v" : " ", ax, cy, Math.min(gh, wdt * 0.26f * 7 / 5), z + 0.0004f, light, col, 0.1f, scroll);
-                Glyphs.dots(ps, buf, cur.isEmpty() ? " " : cur, tx, cy, gh, z + 0.0004f, light, col, 0.1f, 0);
-            }
-            case "lcd" -> {
-                Glyphs.rect(ps, buf, x1, y1, x2, y2, z, RenderUtil.FULL, lcdBg);
-                RenderUtil.text(ps, buf, RenderUtil.arrow(dir), ax, cy, z + 0.001f, h * 0.5f, col);
-                RenderUtil.text(ps, buf, cur, tx, cy, z + 0.001f, h * 0.7f, 0xFFFFFFFF);
-            }
-            default -> {
-                Glyphs.rect(ps, buf, x1, y1, x2, y2, z, RenderUtil.FULL, 0xFF140404);
-                String t = cur.length() >= 2 ? cur : " " + cur;
-                float gh = Math.min(h * 0.72f, tw / (t.length() * 0.56f + (t.length() - 1) * 0.2f));
-                Glyphs.arrow(ps, buf, ax, cy + gh * 0.3f, gh * 0.36f, 1, z + 0.0004f, dir > 0 ? RenderUtil.FULL : light, dir > 0 ? col : Glyphs.dim(col, 0.14f));
-                Glyphs.arrow(ps, buf, ax, cy - gh * 0.3f, gh * 0.36f, -1, z + 0.0004f, dir < 0 ? RenderUtil.FULL : light, dir < 0 ? col : Glyphs.dim(col, 0.14f));
-                Glyphs.seg(ps, buf, t, tx, cy, gh, z + 0.0004f, light, col, 0.13f);
-            }
-        }
+        display(ps, buf, null, null, type, col, lcdBg, x1, y1, x2, y2, z, light, cur, dir, moving);
+    }
+
+    /** 프로필(동작·모양·색)과 전환 효과 상태 key 를 쓰는 위치표시 창 */
+    public static void display(PoseStack ps, MultiBufferSource buf, @org.jetbrains.annotations.Nullable com.mchoe.elevmod.elevator.IndicatorProfile prof,
+                               @org.jetbrains.annotations.Nullable Object key, String type, int col, int bg, float x1, float y1, float x2, float y2,
+                               float z, int light, String cur, int dir, boolean moving) {
+        int base = type.equals("lcd") ? 0xFF7FE3FF : col;
+        int b = type.equals("lcd") ? bg : type.equals("dot") ? 0xFF0C0806 : 0xFF140404;
+        com.mchoe.elevmod.client.indicator.IndicatorDraw.draw(ps, buf, prof, type, base, b, x1, y1, x2, y2, z, light, cur, dir, moving, key);
     }
 
     /** 사진 앞면 (x0,y0 = 왼쪽 아래, +Z 가 보는 사람 쪽) */

@@ -25,7 +25,7 @@ public class ControllerScreen extends Screen {
     private int tab = 0, renameIdx = 0;
     private EditBox nameBox, serialBox;
     private final List<String> info = new ArrayList<>();
-    private static final String[] TABS = {"elevmod.tab.spec", "elevmod.tab.options", "elevmod.tab.floors", "elevmod.tab.operation", "elevmod.tab.info", "elevmod.tab.size", "elevmod.tab.design", "elevmod.tab.door", "elevmod.tab.custom"};
+    private static final String[] TABS = {"elevmod.tab.spec", "elevmod.tab.options", "elevmod.tab.floors", "elevmod.tab.operation", "elevmod.tab.info", "elevmod.tab.size", "elevmod.tab.design", "elevmod.tab.door", "elevmod.tab.custom", "elevmod.tab.indicator"};
 
     public ControllerScreen(BlockPos pos, CompoundTag data) {
         super(Component.translatable("elevmod.screen.controller"));
@@ -190,8 +190,10 @@ public class ControllerScreen extends Screen {
         int top = 28;
         for (int i = 0; i < TABS.length; i++) {
             final int ti = i;
-            Button b = Button.builder(Component.translatable(TABS[i]).withStyle(i == tab ? ChatFormatting.YELLOW : ChatFormatting.WHITE), x -> { tab = ti; rebuildWidgets(); })
-                    .bounds(left + i * 38, top, 37, 18).build();
+            Button b = Button.builder(Component.translatable(TABS[i]).withStyle(i == tab ? ChatFormatting.YELLOW : ChatFormatting.WHITE), x -> {
+                if (ti == 9) { minecraft.setScreen(new IndicatorScreen(pos, this, data)); return; }  // 표시기는 별도 화면
+                tab = ti; rebuildWidgets();
+            }).bounds(left + i * 35 - 5, top, 34, 18).build();
             addRenderableWidget(b);
         }
         int y0 = top + 26;

@@ -41,11 +41,80 @@ public class ElevatorCarEntity extends Entity {
     public float doorPrev, doorCur;
     private int sinceSync;
     private int checkTimer;
+    /** 충돌 조각: 바닥, 천장, 뒷벽(3), 좌·우벽, 앞 좌·우 리턴, 트랜섬, 앞문, 뒷문 */
+    public static final int PARTS = 12;
+    private final CarPart[] parts = new CarPart[PARTS];
 
     public ElevatorCarEntity(EntityType<?> type, Level level) {
         super(type, level);
         this.noPhysics = true;
         this.noCulling = true;
+        for (int i = 0; i < PARTS; i++) parts[i] = new CarPart(this);
+        // 조각들이 다른 엔티티와 id 가 겹치지 않도록 (엔더 드래곤과 같은 방식)
+        setId(ENTITY_COUNTER.getAndAdd(PARTS + 1) + 1);
+    }
+
+    @Override
+    public void setId(int id) {
+        super.setId(id);
+        if (parts == null) return;
+        for (int i = 0; i < parts.length; i++) parts[i].setId(id + i + 1);
+    }
+
+    @Override
+    public boolean isMultipartEntity() { return true; }
+
+    @Override
+    public net.minecraftforge.entity.PartEntity<?>[] getParts() { return parts; }
+
+    /** 클라이언트: 카 벽·천장·문 충돌 조각 위치 갱신 (카 기준 좌표: x = 왼쪽(반시계), z = 정면) */
+    private void updateParts() {
+        CompoundTag st = state();
+        Vec3 o = position();
+        float w = carW(), h = carH(), d = carD(), T = 0.06f;
+        int k = 0;
+        parts[k++].set(local(o, -w / 2, -0.15, -d / 2, w / 2, 0, d / 2));                 // 바닥
+        Spec.Usage u = usage();
+        boolean walls = u != Spec.Usage.WHEELCHAIR_LIFT && u != Spec.Usage.DUMBWAITER;
+        if (!walls) { for (; k < PARTS; k++) parts[k].off(); return; }
+        float fw = st.getFloat("fw"), fh = st.getFloat("fh"), fo = st.getFloat("fo");
+        float rw = st.getFloat("rw"), rh = st.getFloat("rh"), ro = st.getFloat("ro");
+        float door = doorCur;
+        parts[k++].set(local(o, -w / 2, h, -d / 2, w / 2, h + 0.12, d / 2));                // 천장
+        // 뒷벽 (뒷문이 있으면 좌·우·위 3조각)
+        if (rw > 0) {
+            parts[k++].set(local(o, -w / 2, 0, -d / 2 - 0.04, ro - rw / 2, h, -d / 2 + T));
+            parts[k++].set(local(o, ro + rw / 2, 0, -d / 2 - 0.04, w / 2, h, -d / 2 + T));
+            parts[k++].set(local(o, ro - rw / 2, rh, -d / 2 - 0.04, ro + rw / 2, h, -d / 2 + T));
+        } else {
+            parts[k++].set(local(o, -w / 2, 0, -d / 2 - 0.04, w / 2, h, -d / 2 + T));
+            parts[k++].off(); parts[k++].off();
+        }
+        parts[k++].set(local(o, w / 2 - T, 0, -d / 2, w / 2 + 0.04, h, d / 2));             // 왼쪽 벽 (+x)
+        parts[k++].set(local(o, -w / 2 - 0.04, 0, -d / 2, -w / 2 + T, h, d / 2));           // 오른쪽 벽
+        if (fw > 0) {
+            parts[k++].set(local(o, fo + fw / 2, 0, d / 2 - T, w / 2, h, d / 2 + 0.04));     // 앞 리턴
+            parts[k++].set(local(o, -w / 2, 0, d / 2 - T, fo - fw / 2, h, d / 2 + 0.04));
+            parts[k++].set(local(o, fo - fw / 2, fh, d / 2 - T, fo + fw / 2, h, d / 2 + 0.04)); // 트랜섬
+            // 앞문: 거의 다 열릴 때까지는 막음
+            if (door < 0.85f) parts[k++].set(local(o, fo - fw / 2, 0, d / 2 - T, fo + fw / 2, fh, d / 2 + 0.04));
+            else parts[k++].off();
+        } else {
+            parts[k++].set(local(o, -w / 2, 0, d / 2 - T, w / 2, h, d / 2 + 0.04));
+            parts[k++].off(); parts[k++].off(); parts[k++].off();
+        }
+        float rd = st.getBoolean("ro2") ? door : 0;
+        if (rw > 0 && rd < 0.85f) parts[k++].set(local(o, ro - rw / 2, 0, -d / 2 - 0.04, ro + rw / 2, rh, -d / 2 + T));
+        else parts[k++].off();
+        for (; k < PARTS; k++) parts[k].off();
+    }
+
+    /** 카 기준 상자 → 월드 상자 */
+    private AABB local(Vec3 o, double x1, double y1, double z1, double x2, double y2, double z2) {
+        Direction f = facing(), l = f.getCounterClockWise();
+        double ax = o.x + l.getStepX() * x1 + f.getStepX() * z1, az = o.z + l.getStepZ() * x1 + f.getStepZ() * z1;
+        double bx = o.x + l.getStepX() * x2 + f.getStepX() * z2, bz = o.z + l.getStepZ() * x2 + f.getStepZ() * z2;
+        return new AABB(ax, o.y + y1, az, bx, o.y + y2, bz);
     }
 
     @Override
@@ -93,6 +162,7 @@ public class ElevatorCarEntity extends Entity {
         Vec3 p = position();
         double hx = halfX(), hz = halfZ();
         double top = isDumbwaiter() ? carH() : 0;
+        if (level() != null && level().isClientSide && !isDumbwaiter()) top = carH() + 0.12;  // 조각(벽·천장)을 찾을 수 있도록 카 전체
         return new AABB(p.x - hx, p.y - 0.15, p.z - hz, p.x + hx, p.y + top, p.z + hz);
     }
 
@@ -115,7 +185,7 @@ public class ElevatorCarEntity extends Entity {
 
     // ------------------------------------------------------------ 동작
     @Override
-    public boolean canBeCollidedWith() { return level().isClientSide; }
+    public boolean canBeCollidedWith() { return level().isClientSide && isDumbwaiter(); }
 
     @Override
     public boolean isPickable() { return false; }
@@ -213,6 +283,9 @@ public class ElevatorCarEntity extends Entity {
         float dt = doorTarget();
         float step = 0.08f;
         doorCur = Math.abs(dt - doorCur) < step ? dt : doorCur + Math.signum(dt - doorCur) * step;
+        setBoundingBox(makeBoundingBox());
+        if (isDumbwaiter()) { for (CarPart p : parts) p.off(); }
+        else updateParts();
     }
 
     @Override

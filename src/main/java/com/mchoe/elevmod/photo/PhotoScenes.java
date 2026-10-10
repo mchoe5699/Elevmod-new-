@@ -239,6 +239,70 @@ public final class PhotoScenes {
             SHOTS.add(new Shot("83_photo_hall_close", hx + 0.5, Y0 + 0.3, 1.9, 180, 10, ph.getBlockPos(), 0f, 0));
         }
 
+        // ---- M: 편개 2짝(2S) 방범창 – 승강장/카 안에서 같은 문짝에 창이 보여야 함, 트랜섬 도트 표시기 위치 이동
+        x += 10;
+        ControllerBlockEntity sw = elevator(l, p, x, 0, 2, 4, 2, 2, false, cc -> {
+            cc.usage = Spec.Usage.PASSENGER; cc.capIdx = 8; cc.doorType = Spec.DoorType.S2; cc.window = true; cc.windowMask = 0b01;
+            cc.carDisplay = Spec.Display.DOT; cc.indOffX = 25; cc.indOffY = 4;
+            cc.ind.dotCols = 5; cc.ind.dotRows = 12; cc.ind.dotOn = 0xFF40FF60;
+        });
+        SHOTS.add(new Shot("64_s2_window_hall", x + 1.0, Y0, 4.2, 180, 6, sw.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("65_s2_window_car", x + 1.0, Y0, -sw.cd + 0.3, 0, 6, sw.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("66_s2_window_half_hall", x + 1.0, Y0, 4.2, 180, 6, sw.getBlockPos(), 0.4f, 0));
+        SHOTS.add(new Shot("67_s2_window_half_car", x + 1.0, Y0, -sw.cd + 0.3, 0, 6, sw.getBlockPos(), 0.4f, 0));
+        SHOTS.add(new Shot("68_s2_transom_offset", x + 1.0, Y0 + 0.2, -1.0, 0, -28, sw.getBlockPos(), 0f, 0));
+
+        // ---- N: 표시기 사용자 설정 진열 (세그먼트 종류·모양·색, 도트 크기, 애니메이션, 회전)
+        {
+            for (int xx = -22; xx <= 0; xx++) for (int y = Y0; y <= Y0 + 3; y++) set(l, xx, y, 44, Blocks.SMOOTH_QUARTZ.defaultBlockState());
+            for (int xx = -24; xx <= 2; xx++) for (int z = 45; z <= 51; z++) set(l, xx, Y0 - 1, z, Blocks.POLISHED_ANDESITE.defaultBlockState());
+            com.mchoe.elevmod.elevator.DotAnim an = new com.mchoe.elevmod.elevator.DotAnim();
+            an.id = "a_phototest01"; an.name = "Photo Up"; an.cols = 5; an.rows = 7;
+            for (int s2 = 0; s2 < 4; s2++) {
+                com.mchoe.elevmod.elevator.DotAnim.Frame f = new com.mchoe.elevmod.elevator.DotAnim.Frame(35);
+                f.sec = 0.3f;
+                for (int yy = 0; yy < 7; yy++) for (int xx = 0; xx < 5; xx++) {
+                    int r = Math.floorMod(yy + s2 * 2, 7);
+                    boolean on = (r == 0 && xx == 2) || (r == 1 && xx >= 1 && xx <= 3) || (r == 2) || (r >= 3 && xx == 2);
+                    if (on) f.dots[yy * 5 + xx] = (byte) (1 + (s2 % 2) * 2);
+                }
+                an.frames.add(f);
+            }
+            com.mchoe.elevmod.elevator.AnimStore.put(an);
+            com.mchoe.elevmod.network.AnimNet.broadcast();
+            Object[][] show = {
+                    // 블록, 세그종류, 모양, 기울기, 앞자리1, 켜짐색, 잔상색, 도트 가로, 도트 세로, 애니메이션
+                    {ModRegistry.INDICATOR_SEGMENT.get(), 0, 0, 8f, false, 0xFFFF2010, 0xFF3A0A06, 0, 0, ""},
+                    {ModRegistry.INDICATOR_SEGMENT.get(), 0, 1, 4f, false, 0xFF40A8FF, 0xFF0A1A30, 0, 0, ""},
+                    {ModRegistry.INDICATOR_SEGMENT.get(), 1, 0, 6f, true, 0xFFC81400, 0xFF2A0A06, 0, 0, ""},
+                    {ModRegistry.INDICATOR_SEGMENT.get(), 1, 0, 6f, true, 0xFFFF8A18, 0xFF301800, 0, 0, ""},
+                    {ModRegistry.INDICATOR_SEGMENT.get(), 3, 2, 0f, false, 0xFFFF2A10, 0xFF2A0A06, 0, 0, ""},
+                    {ModRegistry.INDICATOR_DOT.get(), 0, 0, 0f, false, 0, 0, 5, 7, "a_phototest01"},
+                    {ModRegistry.INDICATOR_DOT.get(), 0, 0, 0f, false, 0, 0, 5, 12, ""},
+                    {ModRegistry.INDICATOR_DOT.get(), 0, 0, 0f, false, 0, 0, 7, 9, ""}};
+            int sx = -20;
+            for (Object[] v : show) {
+                device(l, p, a, (Block) v[0], sx, Y0 + 2, 45);
+                if (l.getBlockEntity(new BlockPos(sx, Y0 + 2, 45)) instanceof DeviceBlockEntity de) {
+                    com.mchoe.elevmod.elevator.IndicatorProfile ip = new com.mchoe.elevmod.elevator.IndicatorProfile();
+                    ip.segType = (Integer) v[1]; ip.segShape = (Integer) v[2]; ip.segSlant = (Float) v[3]; ip.segLead1 = (Boolean) v[4];
+                    ip.segOn = (Integer) v[5]; ip.segOff = (Integer) v[6];
+                    if ((Integer) v[7] > 0) { ip.dotCols = (Integer) v[7]; ip.dotRows = (Integer) v[8]; }
+                    ip.animUp = (String) v[9]; ip.animIdle = (String) v[9];
+                    if (sx == -13) ip.dotOn = 0xFF40FF60;
+                    if (sx == -14) ip.dotRound = false;
+                    de.forceIndTag(ip.save());
+                }
+                sx += 2;
+            }
+            // 회전한 호출 버튼 (Ctrl + / -)
+            device(l, p, a, ModRegistry.HALL_BUTTON.get(), -3, Y0 + 1, 45);
+            if (l.getBlockEntity(new BlockPos(-3, Y0 + 1, 45)) instanceof DeviceBlockEntity de) de.setYaw(25);
+            SHOTS.add(new Shot("26_ind_seg_left", -16.5, Y0 + 1.3, 47.6, 180, 6, ac, 0f, 0));
+            SHOTS.add(new Shot("27_ind_dot_right", -8.0, Y0 + 1.3, 47.6, 180, 6, ac, 0f, 0));
+            SHOTS.add(new Shot("28_ind_wide", -10.0, Y0 + 0.8, 50.0, 180, 4, ac, 0f, 0));
+        }
+
         // ---- H: 승강장 장치 의장 진열 (디자인 변경기로 바꿀 수 있는 것들)
         for (int xx = -22; xx <= 0; xx++) for (int y = Y0; y <= Y0 + 3; y++) set(l, xx, y, 32, Blocks.SMOOTH_QUARTZ.defaultBlockState());
         for (int xx = -24; xx <= 2; xx++) for (int z = 33; z <= 39; z++) set(l, xx, Y0 - 1, z, Blocks.POLISHED_ANDESITE.defaultBlockState());

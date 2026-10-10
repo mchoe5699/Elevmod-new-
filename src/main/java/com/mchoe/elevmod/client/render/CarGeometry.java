@@ -101,7 +101,13 @@ public final class CarGeometry {
         float fw = st.getFloat("fw"), fh = st.getFloat("fh"), fo = st.getFloat("fo");
         float h = car.carH(), d = car.carD();
         if (fw <= 0 || h - fh < 0.24f) return null;
-        return new float[]{fo - 0.16f, fh + 0.05f, d / 2 - T - 0.012f, fo + 0.16f, Math.min(h - 0.06f, fh + 0.19f), d / 2 - T};
+        // 제어반에서 정한 위치 조정 (cm, 실내에서 볼 때 오른쪽·위가 +)
+        float ox = st.getFloat("indx") / 100f, oy = st.getFloat("indy") / 100f;
+        float y1 = fh + 0.05f + oy, y2 = Math.min(h - 0.06f, fh + 0.19f) + oy;
+        if (y2 > h - 0.01f) { y1 -= y2 - (h - 0.01f); y2 = h - 0.01f; }
+        if (y1 < 0.05f) { y2 += 0.05f - y1; y1 = 0.05f; }
+        float cx = Math.max(-car.carW() / 2 + 0.18f, Math.min(car.carW() / 2 - 0.18f, fo - ox));
+        return new float[]{cx - 0.16f, y1, d / 2 - T - 0.012f, cx + 0.16f, y2, d / 2 - T};
     }
 
     public static AABB toWorld(ElevatorCarEntity car, Vec3 origin, float[] b) {

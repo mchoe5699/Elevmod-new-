@@ -29,14 +29,16 @@ import org.jetbrains.annotations.Nullable;
 /** 제어반 – 기계실(또는 MRL 의 경우 최상층 승강장 옆)에 설치 */
 public class ControllerBlock extends BaseEntityBlock {
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
+    /** 1° 단위로 돌려 놓았으면 블록 모델 대신 블록엔티티 렌더러가 돌려서 그림 */
+    public static final net.minecraft.world.level.block.state.properties.BooleanProperty ROTATED = net.minecraft.world.level.block.state.properties.BooleanProperty.create("rotated");
 
     public ControllerBlock(Properties p) {
         super(p);
-        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
+        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(ROTATED, false));
     }
 
     @Override
-    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> b) { b.add(FACING); }
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> b) { b.add(FACING, ROTATED); }
 
     @Nullable
     @Override

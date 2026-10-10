@@ -107,6 +107,81 @@ public class ControllerBlockEntity extends BlockEntity {
         for (int i = 0; i < CustomDesignIndex.PARTS.length; i++) if (CustomDesignIndex.PARTS[i].equals(part)) return partDesign[i];
         return "";
     }
+    /** 층표시기 동작·모양·색 설정 */
+    public IndicatorProfile ind = new IndicatorProfile();
+    /** 도착 후 문이 열리기 시작할 때까지(초) */
+    public float doorDelay = 0;
+    /** 호출 취소: 켜진 버튼을 몇 번 눌러야 취소되는지 (사용 안 함이면 취소 불가) */
+    public boolean hallCancel = false, carCancel = true;
+    public int hallCancelN = 2, carCancelN = 2;
+    /** 카 안 위치표시기(트랜섬) 위치 조정 (cm) */
+    public float indOffX = 0, indOffY = 0;
+    // 일시 상태
+    private int pendingOpen, arrivedTick = -10000, arrivedDir;
+    private final java.util.Map<String, int[]> pressCount = new java.util.HashMap<>();
+
+    private CompoundTag indTagCache;
+
+    private CompoundTag indTag() {
+        if (indTagCache == null) indTagCache = ind.save();
+        return indTagCache;
+    }
+
+    /** 같은 켜진 버튼을 연속으로 누른 횟수 (1.5초 안에 다시 누르면 이어서 셈) */
+    private int presses(String key) {
+        int[] c = pressCount.computeIfAbsent(key, k -> new int[]{0, -1000});
+        c[0] = tick - c[1] <= 30 ? c[0] + 1 : 1;
+        c[1] = tick;
+        return c[0];
+    }
+
+    /**
+     * 표시기에 보여 줄 방향. 화살표 전환 시점 설정:
+     * 도착 시 = 도착하는 순간 다음 방향으로, 도착 전 = 도착 N초 전에, 도착 후 = 도착하고 N초 뒤에.
+     */
+    public int displayDir() {
+        boolean mv = state == State.MOVING && target >= 0 && target < floorS.length;
+        int travel = mv ? (floorS[target] > s ? 1 : -1) : dir;
+        switch (ind.arrowMode) {
+            case 1 -> {
+                if (mv && !crawl && !parkRun) {
+                    double dist = Math.abs(floorS[target] - s), sp = Math.max(Math.abs(v), 0.02);
+                    double eta = dist / sp / 20.0;
+                    if (eta <= ind.arrowSec) return predictDir(target, travel);
+                }
+                return mv ? travel : dir;
+            }
+            case 2 -> {
+                if (!mv && tick - arrivedTick < ind.arrowSec * 20) return arrivedDir;
+                return mv ? travel : dir;
+            }
+            default -> { return mv ? travel : dir; }
+        }
+    }
+
+    /** 도착 후 갈 방향 예측 (arrive() 와 같은 규칙) */
+    private int predictDir(int at, int d) {
+        if (mode != Spec.Mode.NORMAL && mode != Spec.Mode.INDEPENDENT && mode != Spec.Mode.HOLD) return 0;
+        boolean moreUp = nextUp(at, false) >= 0, moreDown = nextDown(at, false) >= 0;
+        if (d > 0) return moreUp ? 1 : hallDown[at] ? -1 : moreDown ? -1 : 0;
+        if (d < 0) return moreDown ? -1 : hallUp[at] ? 1 : moreUp ? 1 : 0;
+        return 0;
+    }
+
+    /** Ctrl + / - 로 돌린 각도(도) */
+    public float yaw;
+
+    public void setYaw(float y) {
+        yaw = y;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            BlockState st = getBlockState();
+            if (st.hasProperty(com.mchoe.elevmod.block.ControllerBlock.ROTATED) && st.getValue(com.mchoe.elevmod.block.ControllerBlock.ROTATED) != (y != 0))
+                level.setBlock(worldPosition, st.setValue(com.mchoe.elevmod.block.ControllerBlock.ROTATED, y != 0), 3);
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
+    }
+
     /** 복사(월드에딧·/clone) 감지를 위해 저장 당시 위치를 기록 */
     private boolean relocated;
     private boolean serialChecked;
@@ -576,6 +651,8 @@ public class ControllerBlockEntity extends BlockEntity {
     }
 
     private void arrive(ServerLevel lvl) {
+        arrivedDir = dir;
+        arrivedTick = tick;
         cur = target;
         target = -1;
         v = 0;
@@ -607,6 +684,12 @@ public class ControllerBlockEntity extends BlockEntity {
         announceArrival(lvl);
         if (mode == Spec.Mode.FIRE2 || mode == Spec.Mode.FIRE2B) { state = State.IDLE; return; } // 열림 버튼을 눌러야 열림
         if (wasCrawl && !canOpenAt(cur)) { state = State.IDLE; return; }
+        if (doorDelay > 0 && canOpenAt(cur) && usage != Spec.Usage.PATERNOSTER) {
+            // 도착 후 설정한 시간만큼 기다렸다가 문을 엶
+            pendingOpen = Math.max(1, Math.round(doorDelay * 20));
+            state = State.OPENING;
+            return;
+        }
         startOpening(lvl);
     }
 
@@ -674,6 +757,10 @@ public class ControllerBlockEntity extends BlockEntity {
         boolean obstructed = tick % 2 == 0 && doorwayBlocked(lvl);
         switch (state) {
             case OPENING -> {
+                if (pendingOpen > 0) {
+                    if (--pendingOpen == 0) { landingTarget(lvl, cur, true); landingSolid(lvl, cur, false); }
+                    return;
+                }
                 if ((mode == Spec.Mode.FIRE2 || mode == Spec.Mode.FIRE2B) && holdOpen <= 0) { state = State.CLOSING; landingTarget(lvl, cur, false); return; }
                 doorPos = Math.min(1f, doorPos + doorSpeed());
                 if (doorPos >= 1f) { state = State.OPEN; timer = dwellTicks(); }
@@ -991,7 +1078,10 @@ public class ControllerBlockEntity extends BlockEntity {
         for (int i = 0; i < calls.length; i++) calls[i] = (byte) ((carCalls[i] ? 1 : 0) | (hallUp[i] ? 2 : 0) | (hallDown[i] ? 4 : 0));
         t.putByteArray("c", calls);
         t.putInt("cur", floors.isEmpty() ? 0 : nearestIdx(s));
-        t.putInt("dir", dir);
+        t.putInt("dir", displayDir());
+        t.putBoolean("mv", state == State.MOVING);
+        t.put("ind", indTag());
+        t.putFloat("indx", indOffX); t.putFloat("indy", indOffY);
         t.putString("st", statusKey());
         t.putInt("mode", mode.ordinal());
         t.putInt("usage", usage.ordinal());
@@ -1075,6 +1165,7 @@ public class ControllerBlockEntity extends BlockEntity {
         if (h == lastPush && tick % 40 != 0) return;
         lastPush = h;
         List<ControllerBlockEntity> grp = members(lvl);
+        int ddir = displayDir();
         for (BlockPos p : devices) {
             if (!lvl.isLoaded(p)) continue;
             if (!(lvl.getBlockEntity(p) instanceof DeviceBlockEntity d)) continue;
@@ -1095,7 +1186,8 @@ public class ControllerBlockEntity extends BlockEntity {
                 down |= c.hallDown.length > ci && c.hallDown[ci];
             }
             boolean here = fi >= 0 && fi == cur && doorsOpen;
-            d.applyDisplay(text, dir, statusKey(), v != 0, here && dir > 0, here && dir < 0, here && dir == 0,
+            d.setIndTag(indTag());
+            d.applyDisplay(text, ddir, statusKey(), v != 0, here && dir > 0, here && dir < 0, here && dir == 0,
                     up, down, hasUp, hasDown, String.valueOf(letter()), usage == Spec.Usage.DUMBWAITER, floors.get(Math.max(0, fi)).name, namesList());
         }
         float speed = (float) v;
@@ -1148,7 +1240,19 @@ public class ControllerBlockEntity extends BlockEntity {
         List<ControllerBlockEntity> grp = members(lvl);
         for (ControllerBlockEntity c : grp) {
             int i = c.idxOfY(floorY);
-            if (i >= 0 && (up ? c.hallUp[i] : c.hallDown[i])) return;
+            if (i >= 0 && (up ? c.hallUp[i] : c.hallDown[i])) {
+                // 이미 켜진 호출 버튼: 취소 설정이면 정해진 횟수만큼 누를 때 취소
+                if (hallCancel && p != null && presses("h" + floorY + (up ? "u" : "d")) >= hallCancelN) {
+                    for (ControllerBlockEntity m : grp) {
+                        int mi = m.idxOfY(floorY);
+                        if (mi < 0) continue;
+                        if (up) m.hallUp[mi] = false; else m.hallDown[mi] = false;
+                        m.displayHash++;
+                    }
+                    if (p != null) p.displayClientMessage(Component.translatable("elevmod.msg.hall_cancel"), true);
+                }
+                return;
+            }
         }
         ControllerBlockEntity best = null;
         double bc = Double.MAX_VALUE;
@@ -1197,6 +1301,16 @@ public class ControllerBlockEntity extends BlockEntity {
             if (state == State.CLOSING || state == State.IDLE) { if (canOpenAt(cur)) { state = State.OPENING; landingTarget(lvl, cur, true); landingSolid(lvl, cur, false); } }
             return;
         }
+        if (carCalls[idx]) {
+            // 이미 켜진 층 버튼: 취소 설정이면 정해진 횟수만큼 누를 때 취소
+            if (carCancel && presses("c" + idx) >= carCancelN) {
+                carCalls[idx] = false;
+                if (target == idx && state == State.MOVING) { int t = chooseNext(); target = t >= 0 ? t : reachableAhead(); }
+                p.displayClientMessage(Component.translatable("elevmod.msg.cancel", floors.get(idx).name), true);
+                displayHash++;
+            }
+            return;
+        }
         carCalls[idx] = true;
         if (beep) lvl.playSound(null, BlockPos.containing(carPos()), SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.BLOCKS, 0.4f, 2f);
         if (voice == Spec.Voice.VOICE) p.displayClientMessage(Component.translatable("elevmod.voice.floor_button", floors.get(idx).name), true);
@@ -1210,7 +1324,7 @@ public class ControllerBlockEntity extends BlockEntity {
         boolean fireKey = p.getInventory().contains(new net.minecraft.world.item.ItemStack(ModRegistry.FIRE_KEY.get())) || p.isCreative();
         switch (action) {
             case CarAction.FLOOR -> registerCarCall(lvl, arg, p);
-            case CarAction.ACCESSIBLE_FLOOR -> { accessibleDwell = true; registerCarCall(lvl, arg, p); }
+            case CarAction.ACCESSIBLE_FLOOR -> { if (arg >= 0 && arg < carCalls.length && !carCalls[arg]) accessibleDwell = true; registerCarCall(lvl, arg, p); }
             case CarAction.DESIGN -> {
                 if (!p.getMainHandItem().is(ModRegistry.DESIGN_TOOL.get()) && !p.getOffhandItem().is(ModRegistry.DESIGN_TOOL.get())) return;
                 int d = (arg & 1) != 0 ? -1 : 1;
@@ -1231,7 +1345,7 @@ public class ControllerBlockEntity extends BlockEntity {
                 displayHash++;
             }
             case CarAction.CANCEL -> {
-                if (arg >= 0 && arg < carCalls.length && carCalls[arg]) {
+                if (carCancel && arg >= 0 && arg < carCalls.length && carCalls[arg]) {
                     carCalls[arg] = false;
                     if (target == arg && state == State.MOVING) { int t = chooseNext(); target = t >= 0 ? t : reachableAhead(); }
                     p.displayClientMessage(Component.translatable("elevmod.msg.cancel", floors.get(arg).name), true);
@@ -1686,6 +1800,7 @@ public class ControllerBlockEntity extends BlockEntity {
     // ================================================================= 제어반 화면 설정
     public void edit(ServerPlayer p, String key, int delta, String text) {
         if (!(level instanceof ServerLevel lvl)) return;
+        if (key.startsWith("ind.")) { ind.edit(key.substring(4), delta, text); indTagCache = null; key = ""; }
         switch (key) {
             case "usage" -> {
                 Spec.Usage old = usage;
@@ -1758,6 +1873,13 @@ public class ControllerBlockEntity extends BlockEntity {
             case "setdesign" -> { // 디자인 스튜디오에서 만든 디자인을 바로 적용
                 if (CustomDesignIndex.ids().contains(text)) { customDesign = text; designMode = Spec.DesignMode.CUSTOM; designUnified = true; }
             }
+            case "doordelay" -> doorDelay = IndicatorProfile.num(text, doorDelay, 0f, 30f);
+            case "hallcancel" -> hallCancel = !hallCancel;
+            case "hallcancelN" -> hallCancelN = Math.max(1, Math.min(9, (int) IndicatorProfile.num(text, hallCancelN, 1, 9)));
+            case "carcancel" -> carCancel = !carCancel;
+            case "carcancelN" -> carCancelN = Math.max(1, Math.min(9, (int) IndicatorProfile.num(text, carCancelN, 1, 9)));
+            case "indx" -> indOffX = IndicatorProfile.num(text, indOffX, -150f, 150f);
+            case "indy" -> indOffY = IndicatorProfile.num(text, indOffY, -100f, 100f);
             case "serial" -> {
                 String v = text.trim();
                 if (v.isEmpty()) v = newSerial(lvl);
@@ -1966,6 +2088,11 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putInt("carDisplay", carDisplay.ordinal()); t.putInt("copKeys", copKeys.ordinal());
         t.putBoolean("ddCopButtons", ddCopButtons);
         t.putInt("windowMask", windowMask); t.putInt("windowSide", windowSide);
+        t.put("ind", ind.save());
+        t.putFloat("doorDelay", doorDelay);
+        t.putBoolean("hallCancel", hallCancel); t.putInt("hallCancelN", hallCancelN);
+        t.putBoolean("carCancel", carCancel); t.putInt("carCancelN", carCancelN);
+        t.putFloat("indOffX", indOffX); t.putFloat("indOffY", indOffY);
         t.putFloat("openSec", openSec); t.putFloat("closeSec", closeSec);
         t.putInt("designMode", designMode.ordinal()); t.putString("customDesign", customDesign);
         t.putBoolean("designUnified", designUnified);
@@ -2020,6 +2147,12 @@ public class ControllerBlockEntity extends BlockEntity {
         ddCopButtons = t.getBoolean("ddCopButtons");
         windowMask = t.contains("windowMask") ? t.getInt("windowMask") : -1;
         windowSide = t.getInt("windowSide");
+        ind = IndicatorProfile.load(t.getCompound("ind"));
+        indTagCache = null;
+        doorDelay = t.getFloat("doorDelay");
+        hallCancel = t.getBoolean("hallCancel"); hallCancelN = t.contains("hallCancelN") ? t.getInt("hallCancelN") : 2;
+        carCancel = !t.contains("carCancel") || t.getBoolean("carCancel"); carCancelN = t.contains("carCancelN") ? t.getInt("carCancelN") : 2;
+        indOffX = t.getFloat("indOffX"); indOffY = t.getFloat("indOffY");
         openSec = t.getFloat("openSec"); closeSec = t.getFloat("closeSec");
         designMode = en(Spec.DesignMode.values(), t.getInt("designMode"));
         customDesign = t.getString("customDesign");
@@ -2036,6 +2169,7 @@ public class ControllerBlockEntity extends BlockEntity {
         saveSettings(set);
         t.put("settings", set);
         t.putLong("origin", worldPosition.asLong());
+        t.putFloat("yaw", yaw);
         ListTag fl = new ListTag();
         for (Floor f : floors) fl.add(f.save());
         t.put("floors", fl);
@@ -2087,6 +2221,7 @@ public class ControllerBlockEntity extends BlockEntity {
     @Override
     public void load(CompoundTag t) {
         super.load(t);
+        yaw = t.getFloat("yaw");
         if (t.contains("settings")) loadSettings(t.getCompound("settings"));
         floors.clear();
         ListTag fl = t.getList("floors", Tag.TAG_COMPOUND);

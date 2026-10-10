@@ -40,6 +40,13 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
         ps.mulPose(Axis.YP.rotationDegrees(-be.facing().toYRot()));
         float p = progress(be, pt);
         int W = be.w, H = be.h;
+        if (be.yaw != 0) {
+            // Ctrl + / - 회전: 출입구 전체 가운데를 축으로
+            float cx = (W - 1) / 2f;
+            ps.translate(cx, 0, 0);
+            ps.mulPose(Axis.YP.rotationDegrees(-be.yaw));
+            ps.translate(-cx, 0, 0);
+        }
         float cw = Math.min(be.clearW, W), chh = Math.min(be.clearH, H);
         Spec.DoorType t = be.type();
         Spec.Theme th = be.themeE();

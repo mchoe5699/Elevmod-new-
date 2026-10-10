@@ -49,11 +49,13 @@ public class MachineBlockEntity extends BlockEntity {
         t.putFloat("speed", speed);
         t.putInt("drive", drive);
         t.putLong("origin", worldPosition.asLong());
+        t.putFloat("yaw", yaw);
     }
 
     @Override
     public void load(CompoundTag t) {
         super.load(t);
+        yaw = t.getFloat("yaw");
         ctrl = t.contains("ctrl") ? BlockPos.of(t.getLong("ctrl")) : null;
         speed = t.getFloat("speed");
         drive = t.getInt("drive");
@@ -61,6 +63,17 @@ public class MachineBlockEntity extends BlockEntity {
             BlockPos o = BlockPos.of(t.getLong("origin"));
             if (!o.equals(worldPosition)) { ctrl = ctrl.offset(worldPosition.subtract(o)); moved = true; }
         }
+    }
+
+    /** Ctrl + / - 로 돌린 각도(도, 세로축) */
+    public float yaw;
+
+    public void setYaw(float y) {
+        yaw = y;
+        setChanged();
+        if (level != null && !level.isClientSide && getBlockState().hasProperty(MachineBlock.ROTATED) && getBlockState().getValue(MachineBlock.ROTATED) != (y != 0))
+            level.setBlock(worldPosition, getBlockState().setValue(MachineBlock.ROTATED, y != 0), 3);
+        if (level != null && !level.isClientSide) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
     }
 
     /** 복사로 좌표가 옮겨졌으면 새 좌표가 저장되도록 표시 */

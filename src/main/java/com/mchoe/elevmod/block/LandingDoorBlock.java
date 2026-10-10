@@ -57,7 +57,38 @@ public class LandingDoorBlock extends BaseEntityBlock {
 
     @Override
     public VoxelShape getCollisionShape(BlockState s, BlockGetter g, BlockPos p, CollisionContext c) {
-        return s.getValue(OPEN) ? Shapes.empty() : Shapes2.wall(s.getValue(FACING), 0, 0, 16, 16, 4);
+        if (!s.getValue(OPEN)) return Shapes2.wall(s.getValue(FACING), 0, 0, 16, 16, 4);
+        // 열렸을 때도 유효 개구 밖(쟘·상부 틀)은 막혀 있어야 함
+        return g.getBlockEntity(p) instanceof LandingDoorBlockEntity be ? openShape(s.getValue(FACING), be) : Shapes.empty();
+    }
+
+    /** 충돌 모양이 블록 엔티티(출입구 크기)에 따라 달라지므로 상태별 캐시를 쓰지 않음 */
+    @Override
+    public boolean hasDynamicShape() { return true; }
+
+    /** 문이 열린 칸의 충돌 모양: 출입구(유효 개구) 바깥 부분만 막음 */
+    static VoxelShape openShape(Direction facing, LandingDoorBlockEntity be) {
+        float cw = Math.min(be.clearW, be.w), chh = Math.min(be.clearH, be.h);
+        double x1 = -0.5 + (be.w - cw) / 2.0, x2 = x1 + cw;          // 출입구 전체 기준 좌표 (칸 가운데 = col)
+        double c0 = be.col - 0.5;
+        double a = Math.max(0, Math.min(1, x1 - c0)), b = Math.max(0, Math.min(1, x2 - c0));
+        double top = Math.max(0, Math.min(1, chh - be.row));
+        VoxelShape out = Shapes.empty();
+        if (a > 0.01) out = Shapes.or(out, along(facing, 0, a, 0, 1));
+        if (b < 0.99) out = Shapes.or(out, along(facing, b, 1, 0, 1));
+        if (top < 0.99 && b - a > 0.01) out = Shapes.or(out, along(facing, a, b, top, 1));
+        return out;
+    }
+
+    /** 출입구 가로 방향(u: 승강장에서 보는 축) 구간 → 블록 안의 상자 (두께는 칸 전체) */
+    private static VoxelShape along(Direction facing, double u1, double u2, double y1, double y2) {
+        Direction ax = facing.getCounterClockWise();
+        return switch (ax) {
+            case EAST -> Shapes.box(u1, y1, 0, u2, y2, 1);
+            case WEST -> Shapes.box(1 - u2, y1, 0, 1 - u1, y2, 1);
+            case SOUTH -> Shapes.box(0, y1, u1, 1, y2, u2);
+            default -> Shapes.box(0, y1, 1 - u2, 1, y2, 1 - u1);
+        };
     }
 
     @Override

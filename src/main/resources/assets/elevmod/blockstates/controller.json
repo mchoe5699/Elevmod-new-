@@ -1,20 +1,32 @@
 {
   "variants": {
-    "facing=north": {
+    "facing=north,rotated=false": {
       "model": "elevmod:block/controller",
       "y": 0
     },
-    "facing=east": {
+    "facing=north,rotated=true": {
+      "model": "elevmod:block/empty"
+    },
+    "facing=east,rotated=false": {
       "model": "elevmod:block/controller",
       "y": 90
     },
-    "facing=south": {
+    "facing=east,rotated=true": {
+      "model": "elevmod:block/empty"
+    },
+    "facing=south,rotated=false": {
       "model": "elevmod:block/controller",
       "y": 180
     },
-    "facing=west": {
+    "facing=south,rotated=true": {
+      "model": "elevmod:block/empty"
+    },
+    "facing=west,rotated=false": {
       "model": "elevmod:block/controller",
       "y": 270
+    },
+    "facing=west,rotated=true": {
+      "model": "elevmod:block/empty"
     }
   }
 }

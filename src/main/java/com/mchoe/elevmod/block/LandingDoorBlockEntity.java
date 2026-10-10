@@ -173,11 +173,13 @@ public class LandingDoorBlockEntity extends BlockEntity {
         t.putBoolean("manual", manual);
         t.putString("csel", customSel);
         t.putLong("origin", worldPosition.asLong());
+        t.putFloat("yaw", yaw);
     }
 
     @Override
     public void load(CompoundTag t) {
         super.load(t);
+        yaw = t.getFloat("yaw");
         ctrl = t.contains("ctrl") ? BlockPos.of(t.getLong("ctrl")) : null;
         master = !t.contains("master") || t.getBoolean("master");
         col = t.getInt("col"); row = t.getInt("row");
@@ -197,6 +199,15 @@ public class LandingDoorBlockEntity extends BlockEntity {
             if (!o.equals(worldPosition)) { ctrl = ctrl.offset(worldPosition.subtract(o)); moved = true; }
         }
         jambOverride = t.contains("jambO") ? t.getInt("jambO") : -1;
+    }
+
+    /** Ctrl + / - 로 돌린 각도(도, 세로축) */
+    public float yaw;
+
+    public void setYaw(float y) {
+        yaw = y;
+        setChanged();
+        if (level != null && !level.isClientSide) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
     }
 
     /** 복사로 좌표가 옮겨졌으면 새 좌표가 저장되도록 표시 */
