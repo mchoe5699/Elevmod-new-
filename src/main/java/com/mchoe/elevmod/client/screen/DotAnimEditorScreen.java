@@ -113,50 +113,50 @@ public class DotAnimEditorScreen extends Screen {
 
         // ---- 오른쪽: 이름·크기·옵션
         int rx = gridX() + 190;
-        nameBox = new EditBox(font, rx, t, 106, 18, Component.literal("name"));
+        nameBox = new EditBox(font, rx, t, 130, 18, Component.literal("name"));
         nameBox.setMaxLength(32);
         nameBox.setValue(anim.name);
         nameBox.setResponder(s -> { anim.name = s; dirty = true; });
         addRenderableWidget(nameBox);
-        sizeBox = new EditBox(font, rx, t + 22, 60, 18, Component.literal("size"));
+        sizeBox = new EditBox(font, rx, t + 22, 70, 18, Component.literal("size"));
         sizeBox.setMaxLength(7);
         sizeBox.setValue(anim.cols + "x" + anim.rows);
         addRenderableWidget(sizeBox);
-        addRenderableWidget(Button.builder(Component.translatable("elevmod.set.apply"), b -> applySize()).bounds(rx + 64, t + 22, 42, 18).build());
+        addRenderableWidget(Button.builder(Component.translatable("elevmod.set.apply"), b -> applySize()).bounds(rx + 74, t + 22, 56, 18).build());
         addRenderableWidget(Button.builder(Component.translatable(anim.loop ? "elevmod.anim.loop" : "elevmod.anim.once"), b -> { anim.loop = !anim.loop; dirty = true; rebuildWidgets(); })
-                .bounds(rx, t + 44, 52, 18).build());
+                .bounds(rx, t + 44, 64, 18).build());
         addRenderableWidget(Button.builder(Component.translatable(anim.full ? "elevmod.anim.full" : "elevmod.anim.arrow"), b -> { anim.full = !anim.full; dirty = true; rebuildWidgets(); })
-                .bounds(rx + 54, t + 44, 52, 18).build());
+                .bounds(rx + 66, t + 44, 64, 18).build());
 
         // ---- 장면
         int fy = t + 104;
         addRenderableWidget(Button.builder(Component.literal("◀"), b -> { frame = Math.max(0, frame - 1); rebuildWidgets(); }).bounds(rx, fy, 20, 18).build());
-        addRenderableWidget(Button.builder(Component.literal("▶"), b -> { frame = Math.min(anim.frames.size() - 1, frame + 1); rebuildWidgets(); }).bounds(rx + 86, fy, 20, 18).build());
-        secBox = new EditBox(font, rx, fy + 22, 50, 18, Component.literal("sec"));
+        addRenderableWidget(Button.builder(Component.literal("▶"), b -> { frame = Math.min(anim.frames.size() - 1, frame + 1); rebuildWidgets(); }).bounds(rx + 110, fy, 20, 18).build());
+        secBox = new EditBox(font, rx, fy + 22, 60, 18, Component.literal("sec"));
         secBox.setMaxLength(6);
         secBox.setValue(String.valueOf(cur().sec));
         addRenderableWidget(secBox);
-        addRenderableWidget(Button.builder(Component.translatable("elevmod.set.apply"), b -> applySec()).bounds(rx + 54, fy + 22, 52, 18).build());
+        addRenderableWidget(Button.builder(Component.translatable("elevmod.set.apply"), b -> applySec()).bounds(rx + 66, fy + 22, 64, 18).build());
         addRenderableWidget(Button.builder(Component.translatable("elevmod.anim.f_add"), b -> {
             if (anim.frames.size() >= DotAnim.MAX_FRAMES) return;
             DotAnim.Frame f = new DotAnim.Frame(anim.cols * anim.rows); f.sec = cur().sec;
             anim.frames.add(frame + 1, f); frame++; dirty = true; rebuildWidgets();
-        }).bounds(rx, fy + 44, 52, 18).build());
+        }).bounds(rx, fy + 44, 64, 18).build());
         addRenderableWidget(Button.builder(Component.translatable("elevmod.anim.f_dup"), b -> {
             if (anim.frames.size() >= DotAnim.MAX_FRAMES) return;
             anim.frames.add(frame + 1, cur().copy()); frame++; dirty = true; rebuildWidgets();
-        }).bounds(rx + 54, fy + 44, 52, 18).build());
+        }).bounds(rx + 66, fy + 44, 64, 18).build());
         addRenderableWidget(Button.builder(Component.translatable("elevmod.anim.f_del"), b -> {
             if (anim.frames.size() <= 1) { java.util.Arrays.fill(cur().dots, (byte) 0); }
             else { anim.frames.remove(frame); frame = Math.max(0, frame - 1); }
             dirty = true; rebuildWidgets();
-        }).bounds(rx, fy + 66, 52, 18).build());
+        }).bounds(rx, fy + 66, 64, 18).build());
         addRenderableWidget(Button.builder(Component.translatable("elevmod.anim.f_move"), b -> {
             // 이 장면을 앞으로 (Shift: 뒤로)
             int to = Screen.hasShiftDown() ? frame + 1 : frame - 1;
             if (to < 0 || to >= anim.frames.size()) return;
             DotAnim.Frame f = anim.frames.remove(frame); anim.frames.add(to, f); frame = to; dirty = true; rebuildWidgets();
-        }).bounds(rx + 54, fy + 66, 52, 18).build());
+        }).bounds(rx + 66, fy + 66, 64, 18).build());
 
         // ---- 도구 (도트 칸 아래)
         int ty = gridY() + 156;
@@ -323,7 +323,7 @@ public class DotAnimEditorScreen extends Screen {
 
         // 오른쪽 글자·팔레트
         int rx = gx + 190, t = top();
-        g.drawString(font, I18n.get("elevmod.anim.size_label"), rx + 110, t + 27, 0xFF888888, false);
+        g.drawString(font, I18n.get("elevmod.anim.size_label"), rx + 134, t + 27, 0xFF888888, false);
         int py = t + 66;
         for (int i = 0; i < 8; i++) {
             int x = rx + (i % 4) * 27, y = py + (i / 4) * 17;
@@ -331,8 +331,8 @@ public class DotAnimEditorScreen extends Screen {
             g.fill(x, y, x + 25, y + 15, anim.palette[i]);
         }
         g.drawString(font, I18n.get("elevmod.anim.palette_hint"), rx + 110, py + 4, 0xFF888888, false);
-        g.drawCenteredString(font, I18n.get("elevmod.anim.frame", frame + 1, anim.frames.size()), rx + 53, t + 109, 0xFFFFD040);
-        g.drawString(font, I18n.get("elevmod.anim.sec_label"), rx + 110, t + 131, 0xFFDDDDDD, false);
+        g.drawCenteredString(font, I18n.get("elevmod.anim.frame", frame + 1, anim.frames.size()), rx + 65, t + 109, 0xFFFFD040);
+        g.drawString(font, I18n.get("elevmod.anim.sec_label"), rx + 134, t + 131, 0xFFDDDDDD, false);
         g.drawString(font, I18n.get("elevmod.anim.total", String.format("%.2f", anim.totalSec())), rx, t + 192, 0xFFAAAAAA, false);
         if (dirty) g.drawString(font, I18n.get("elevmod.anim.unsaved"), rx, t + 202, 0xFFFF8060, false);
         g.drawString(font, I18n.get("elevmod.anim.paint_hint"), gx, gy + 200, 0xFF888888, false);
@@ -340,7 +340,7 @@ public class DotAnimEditorScreen extends Screen {
         // 작은 미리보기 (항상 재생)
         DotAnim.Frame pf = anim.frameAt(time());
         if (pf != null) {
-            int ps = Math.max(2, Math.min(50 / anim.cols, 60 / anim.rows)), ox = rx + 112, oy = t + 150;
+            int ps = Math.max(2, Math.min(50 / anim.cols, 60 / anim.rows)), ox = rx + 136, oy = t + 150;
             g.fill(ox - 2, oy - 2, ox + anim.cols * ps + 2, oy + anim.rows * ps + 2, 0xFF050505);
             for (int y = 0; y < anim.rows; y++) for (int x = 0; x < anim.cols; x++) {
                 int v = pf.dots[y * anim.cols + x];
