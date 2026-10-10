@@ -1919,9 +1919,9 @@ public class ControllerBlockEntity extends BlockEntity {
         t.put("log", log);
         double h = floors.isEmpty() ? 0 : floors.get(floors.size() - 1).y - floors.get(0).y;
         t.putDouble("rise", h);
-        CompoundTag names = new CompoundTag();
-        for (String id : CustomDesignIndex.ids()) names.putString(id, CustomDesignIndex.name(id));
-        t.put("designNames", names);
+        CompoundTag dn = new CompoundTag();
+        for (String id : CustomDesignIndex.ids()) dn.putString(id, CustomDesignIndex.name(id));
+        t.put("designNames", dn);
         return t;
     }
 
