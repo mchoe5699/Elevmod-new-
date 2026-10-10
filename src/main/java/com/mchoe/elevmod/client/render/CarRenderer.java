@@ -366,14 +366,14 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         ps.pushPose();
         // 판넬 앞면을 원점, 카 안쪽을 +Z, 오른쪽을 +X 로 하는 좌표계로 변환
         float pw;
-        if (cop.wall == 0) {
+        if (cop.wall() == 0) {
             ps.translate((b[0] + b[3]) / 2, 0, b[2]);
             ps.mulPose(Axis.YP.rotationDegrees(180));
             pw = b[3] - b[0];
         } else {
-            float face = cop.wall > 0 ? b[0] : b[3];
+            float face = cop.wall() > 0 ? b[0] : b[3];
             ps.translate(face, 0, (b[2] + b[5]) / 2);
-            ps.mulPose(Axis.YP.rotationDegrees(cop.wall > 0 ? -90 : 90));
+            ps.mulPose(Axis.YP.rotationDegrees(cop.wall() > 0 ? -90 : 90));
             pw = b[5] - b[2];
         }
         copFace(c, pw, b[1], b[4], false);
