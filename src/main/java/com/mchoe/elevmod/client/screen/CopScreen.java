@@ -1,0 +1,191 @@
+package com.mchoe.elevmod.client.screen;
+
+import com.mchoe.elevmod.elevator.CarAction;
+import com.mchoe.elevmod.elevator.Spec;
+import com.mchoe.elevmod.entity.ElevatorCarEntity;
+import com.mchoe.elevmod.network.Net;
+import com.mchoe.elevmod.registry.ModRegistry;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/** 카 내부 운전반(COP / 장애인용 운전반) */
+public class CopScreen extends Screen {
+    private final ElevatorCarEntity car;
+    private final boolean accessible;
+    private final List<Button> floorButtons = new ArrayList<>();
+    private int heldAction, tick, lastFloorClick = -1, lastFloorTick;
+    private int panelX, panelY, panelW, panelH, floorCount;
+
+    public CopScreen(ElevatorCarEntity car, boolean accessible) {
+        super(Component.translatable(accessible ? "elevmod.screen.cop_acc" : "elevmod.screen.cop"));
+        this.car = car;
+        this.accessible = accessible;
+    }
+
+    private CompoundTag st() { return car.state(); }
+
+    private void send(int action, int arg) { Net.CH.sendToServer(new Net.CarActionMsg(car.controller(), action, arg)); }
+
+    private boolean has(net.minecraft.world.item.Item item) {
+        return minecraft != null && minecraft.player != null && (minecraft.player.getInventory().contains(new ItemStack(item)) || minecraft.player.isCreative());
+    }
+
+    @Override
+    protected void init() {
+        floorButtons.clear();
+        CompoundTag st = st();
+        ListTag names = st.getList("n", Tag.TAG_STRING);
+        floorCount = names.size();
+        int cols = floorCount > 40 ? 8 : floorCount > 20 ? 6 : 4;
+        int bw = 34, bh = 18, gap = 3;
+        int rows = Math.max(1, (floorCount + cols - 1) / cols);
+        panelW = Math.max(220, cols * (bw + gap) + 20);
+        panelH = 70 + rows * (bh + gap) + 90;
+        panelX = (width - panelW) / 2;
+        panelY = Math.max(4, (height - panelH) / 2);
+        int gridX = panelX + (panelW - cols * (bw + gap) + gap) / 2;
+        int gridY = panelY + 62;
+        Spec.Usage usage = car.usage();
+        // 층 버튼 – 아래층이 아래에 오도록
+        for (int i = 0; i < floorCount; i++) {
+            final int idx = i;
+            int r = (floorCount - 1 - i) / cols, c = i % cols;
+            Button b = Button.builder(Component.literal(names.getString(i)), btn -> pressFloor(idx))
+                    .bounds(gridX + c * (bw + gap), gridY + r * (bh + gap), bw, bh).build();
+            floorButtons.add(addRenderableWidget(b));
+        }
+        int y = gridY + rows * (bh + gap) + 6;
+        int x = panelX + 10;
+        int w3 = (panelW - 20 - 8) / 3;
+        addRenderableWidget(new HoldButton(x, y, w3, 20, Component.literal("◀ ▶ ").append(Component.translatable("elevmod.cop.open")), CarAction.OPEN, CarAction.OPEN_HOLD));
+        addRenderableWidget(new HoldButton(x + w3 + 4, y, w3, 20, Component.literal("▶ ◀ ").append(Component.translatable("elevmod.cop.close")), CarAction.CLOSE, CarAction.CLOSE_HOLD));
+        addRenderableWidget(Button.builder(Component.translatable("elevmod.cop.alarm").withStyle(ChatFormatting.GOLD), b -> send(CarAction.ALARM, 0))
+                .bounds(x + 2 * (w3 + 4), y, w3, 20).build());
+        y += 24;
+        List<Button> extra = new ArrayList<>();
+        if (usage == Spec.Usage.FREIGHT || usage == Spec.Usage.PASSENGER_FREIGHT || usage == Spec.Usage.CAR)
+            extra.add(Button.builder(Component.translatable("elevmod.cop.hold"), b -> send(CarAction.HOLD, 0)).size(64, 20).build());
+        if (st.getBoolean("stop"))
+            extra.add(Button.builder(Component.translatable("elevmod.cop.stop").withStyle(ChatFormatting.RED), b -> send(CarAction.STOP_SWITCH, 0)).size(64, 20).build());
+        if (has(ModRegistry.OPERATOR_KEY.get())) {
+            extra.add(Button.builder(Component.translatable("elevmod.cop.independent"), b -> send(CarAction.KEY_INDEPENDENT, 0)).size(64, 20).build());
+            extra.add(Button.builder(Component.translatable("elevmod.cop.inspection"), b -> send(CarAction.KEY_INSPECTION, 0)).size(64, 20).build());
+        }
+        if (has(ModRegistry.FIRE_KEY.get())) {
+            extra.add(Button.builder(Component.translatable("elevmod.cop.fire1").withStyle(ChatFormatting.RED), b -> send(CarAction.KEY_FIRE1, 0)).size(64, 20).build());
+            extra.add(Button.builder(Component.translatable("elevmod.cop.fire2").withStyle(ChatFormatting.RED), b -> send(CarAction.KEY_FIRE2, 0)).size(64, 20).build());
+        }
+        boolean run = usage == Spec.Usage.WHEELCHAIR_LIFT || st.getInt("mode") == Spec.Mode.INSPECTION.ordinal();
+        if (run) {
+            extra.add(new HoldButton(0, 0, 64, 20, Component.literal("▲ ").append(Component.translatable("elevmod.cop.run_up")), CarAction.RUN_UP, CarAction.RUN_UP));
+            extra.add(new HoldButton(0, 0, 64, 20, Component.literal("▼ ").append(Component.translatable("elevmod.cop.run_down")), CarAction.RUN_DOWN, CarAction.RUN_DOWN));
+        }
+        int perRow = Math.max(1, (panelW - 20) / 68);
+        for (int i = 0; i < extra.size(); i++) {
+            Button b = extra.get(i);
+            b.setX(panelX + 10 + (i % perRow) * 68);
+            b.setY(y + (i / perRow) * 22);
+            addRenderableWidget(b);
+        }
+        panelH = Math.max(panelH, y - panelY + ((extra.size() + perRow - 1) / perRow) * 22 + 8);
+    }
+
+    private void pressFloor(int idx) {
+        byte[] calls = st().getByteArray("c");
+        boolean lit = idx < calls.length && (calls[idx] & 1) != 0;
+        if (lit && lastFloorClick == idx && tick - lastFloorTick < 15) {
+            send(CarAction.CANCEL, idx); // 두 번 눌러 취소
+            lastFloorClick = -1;
+            return;
+        }
+        lastFloorClick = idx;
+        lastFloorTick = tick;
+        if (!lit) send(accessible ? CarAction.ACCESSIBLE_FLOOR : CarAction.FLOOR, idx);
+    }
+
+    @Override
+    public void tick() {
+        tick++;
+        if (car.isRemoved() || minecraft == null || minecraft.player == null || minecraft.player.distanceTo(car) > 8) { onClose(); return; }
+        if (heldAction != 0 && tick % 2 == 0) send(heldAction, 0);
+        CompoundTag st = st();
+        if (st.getList("n", Tag.TAG_STRING).size() != floorCount) { rebuildWidgets(); return; }
+        byte[] calls = st.getByteArray("c");
+        ListTag names = st.getList("n", Tag.TAG_STRING);
+        for (int i = 0; i < floorButtons.size(); i++) {
+            boolean lit = i < calls.length && (calls[i] & 1) != 0;
+            Component c = Component.literal(names.getString(i));
+            floorButtons.get(i).setMessage(lit ? c.copy().withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD) : c);
+        }
+    }
+
+    @Override
+    public boolean mouseReleased(double mx, double my, int btn) {
+        heldAction = 0;
+        return super.mouseReleased(mx, my, btn);
+    }
+
+    @Override
+    public void render(GuiGraphics g, int mx, int my, float pt) {
+        renderBackground(g);
+        g.fill(panelX, panelY, panelX + panelW, panelY + panelH, 0xE0202428);
+        g.fill(panelX + 2, panelY + 2, panelX + panelW - 2, panelY + panelH - 2, 0xF0585E66);
+        CompoundTag st = st();
+        ListTag names = st.getList("n", Tag.TAG_STRING);
+        int n = names.size();
+        String cur = n > 0 ? names.getString(Math.max(0, Math.min(st.getInt("cur"), n - 1))) : "-";
+        int dir = st.getInt("dir");
+        // 표시창
+        g.fill(panelX + 10, panelY + 8, panelX + panelW - 10, panelY + 40, 0xFF050505);
+        String arrow = dir > 0 ? "▲" : dir < 0 ? "▼" : " ";
+        g.pose().pushPose();
+        g.pose().translate(panelX + 18, panelY + 13, 0);
+        g.pose().scale(2.2f, 2.2f, 1);
+        g.drawString(font, arrow + " " + cur, 0, 0, 0xFFFF6A1A, false);
+        g.pose().popPose();
+        String status = st.getString("st");
+        if (!status.isEmpty()) g.drawString(font, I18n.get("elevmod.status." + status), panelX + panelW / 2, panelY + 12, 0xFFFFD040, false);
+        if (st.getBoolean("air")) g.drawString(font, "Air-Clean", panelX + panelW / 2, panelY + 26, 0xFF60D0FF, false);
+        int kg = st.getInt("kg");
+        String spec = I18n.get("elevmod.cop.spec", Spec.persons(kg), kg, st.getInt("spd"));
+        g.drawString(font, spec, panelX + 10, panelY + 44, 0xFFE0E0E0, false);
+        String ser = I18n.get("elevmod.cop.serial", st.getString("let"), st.getString("ser"));
+        g.drawString(font, ser, panelX + panelW - 10 - font.width(ser), panelY + 44, 0xFFB0B0B0, false);
+        if (st.getBoolean("dd") && st.getInt("mode") == Spec.Mode.NORMAL.ordinal())
+            g.drawCenteredString(font, I18n.get("elevmod.msg.dd_mode"), width / 2, panelY + panelH + 4, 0xFFFFD040);
+        if (car.usage() == Spec.Usage.WHEELCHAIR_LIFT)
+            g.drawCenteredString(font, I18n.get("elevmod.cop.lift_hint"), width / 2, panelY + panelH + 4, 0xFFFFD040);
+        super.render(g, mx, my, pt);
+    }
+
+    @Override
+    public boolean isPauseScreen() { return false; }
+
+    /** 누르고 있는 동안 계속 신호를 보내는 버튼 */
+    private class HoldButton extends Button {
+        private final int press, hold;
+
+        HoldButton(int x, int y, int w, int h, Component msg, int press, int hold) {
+            super(x, y, w, h, msg, b -> {}, DEFAULT_NARRATION);
+            this.press = press;
+            this.hold = hold;
+        }
+
+        @Override
+        public void onPress() {
+            send(press, 0);
+            heldAction = hold;
+        }
+    }
+}
