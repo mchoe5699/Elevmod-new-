@@ -24,6 +24,12 @@ public final class RenderUtil {
     private static final Map<String, ResourceLocation> TEX = new HashMap<>();
 
     public static ResourceLocation tex(String name) {
+        if (name.startsWith("@")) {
+            // 사용자 디자인 사진 텍스처: "@디자인id/이름"
+            int i = name.indexOf('/');
+            ResourceLocation rl = TEX.computeIfAbsent(name, n -> com.mchoe.elevmod.client.design.RemoteDesigns.textureId(n.substring(1, i), n.substring(i + 1)));
+            return com.mchoe.elevmod.client.design.RemoteDesigns.ready(rl) ? rl : tex("white");
+        }
         return TEX.computeIfAbsent(name, n -> new ResourceLocation(ElevMod.MODID, "textures/entity/" + n + ".png"));
     }
 

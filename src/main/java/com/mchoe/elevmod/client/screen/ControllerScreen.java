@@ -25,7 +25,7 @@ public class ControllerScreen extends Screen {
     private int tab = 0, renameIdx = 0;
     private EditBox nameBox, serialBox;
     private final List<String> info = new ArrayList<>();
-    private static final String[] TABS = {"elevmod.tab.spec", "elevmod.tab.options", "elevmod.tab.floors", "elevmod.tab.operation", "elevmod.tab.info", "elevmod.tab.size", "elevmod.tab.design", "elevmod.tab.door"};
+    private static final String[] TABS = {"elevmod.tab.spec", "elevmod.tab.options", "elevmod.tab.floors", "elevmod.tab.operation", "elevmod.tab.info", "elevmod.tab.size", "elevmod.tab.design", "elevmod.tab.door", "elevmod.tab.custom"};
 
     public ControllerScreen(BlockPos pos, CompoundTag data) {
         super(Component.translatable("elevmod.screen.controller"));
@@ -72,6 +72,12 @@ public class ControllerScreen extends Screen {
         float v = t.getFloat(key);
         if (v > 0) return Component.translatable("elevmod.sec1", String.format("%.1f", v)).withStyle(ChatFormatting.AQUA);
         return Component.translatable("elevmod.sec_auto", String.format("%.1f", auto));
+    }
+
+    private Component dname(String id) {
+        if (id.isEmpty()) return Component.translatable("elevmod.dmode.basic");
+        CompoundTag n = data.getCompound("designNames");
+        return Component.literal(n.contains(id) ? n.getString(id) : id);
     }
 
     /** 방범창 문짝 이름: 닫힌 상태에서 승강장에서 볼 때 순번 */
@@ -142,13 +148,19 @@ public class ControllerScreen extends Screen {
                 r.add(new Row("disp", "elevmod.set.disp", t -> Component.translatable(en(Spec.Display.values(), t.getInt("carDisplay")).key())));
                 r.add(new Row("wallf", "elevmod.set.wallf", t -> Component.translatable(en(Spec.WallFinish.values(), t.getInt("wallFinish")).key())));
                 r.add(new Row("floorf", "elevmod.set.floorf", t -> Component.translatable(en(Spec.FloorFinish.values(), t.getInt("floorFinish")).key())));
+            }
+            case 8 -> {
                 r.add(new Row("designmode", "elevmod.set.designmode", t -> Component.translatable(en(Spec.DesignMode.values(), t.getInt("designMode")).key())));
-                r.add(new Row("customdesign", "elevmod.set.customdesign", t -> {
-                    String id = t.getString("customDesign");
-                    if (id.isEmpty()) return Component.translatable("elevmod.none");
-                    var cd = com.mchoe.elevmod.client.design.CustomDesigns.get(id);
-                    return Component.literal(cd == null ? id : cd.name());
-                }));
+                r.add(new Row("dunified", "elevmod.set.dunified", t -> Component.translatable(t.getBoolean("designUnified") ? "elevmod.dunified.on" : "elevmod.dunified.off")));
+                if (data.getBoolean("designUnified")) {
+                    r.add(new Row("customdesign", "elevmod.set.customdesign", t -> dname(t.getString("customDesign"))));
+                } else {
+                    String[] parts = com.mchoe.elevmod.elevator.CustomDesignIndex.PARTS;
+                    for (int i = 0; i < parts.length; i++) {
+                        final String key = "pd_" + parts[i];
+                        r.add(new Row("dpart", "elevmod.dpart." + parts[i], t -> dname(t.getString(key)), String.valueOf(i), null));
+                    }
+                }
             }
             case 7 -> {
                 Spec.DoorType dt = en(Spec.DoorType.values(), data.getInt("doorType"));
@@ -179,7 +191,7 @@ public class ControllerScreen extends Screen {
         for (int i = 0; i < TABS.length; i++) {
             final int ti = i;
             Button b = Button.builder(Component.translatable(TABS[i]).withStyle(i == tab ? ChatFormatting.YELLOW : ChatFormatting.WHITE), x -> { tab = ti; rebuildWidgets(); })
-                    .bounds(left + i * 43, top, 41, 18).build();
+                    .bounds(left + i * 38, top, 37, 18).build();
             addRenderableWidget(b);
         }
         int y0 = top + 26;
@@ -213,6 +225,10 @@ public class ControllerScreen extends Screen {
             }
         }
         serialBox = null;
+        if (tab == 8) {
+            addRenderableWidget(Button.builder(Component.translatable("elevmod.studio.open").withStyle(ChatFormatting.AQUA),
+                    b -> minecraft.setScreen(new DesignStudioScreen(pos, this))).bounds(left, y0 + 8 * 22 + 6, 160, 20).build());
+        }
         if (tab == 0) {
             int y = y0 + 6 * 22 + 10;
             serialBox = new EditBox(font, left + 92, y, 90, 20, Component.literal("serial"));

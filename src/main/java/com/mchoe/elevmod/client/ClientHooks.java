@@ -22,6 +22,10 @@ public final class ClientHooks {
         }
     }
 
+    public static void openStudio() {
+        Minecraft.getInstance().setScreen(new com.mchoe.elevmod.client.screen.DesignStudioScreen(null, null));
+    }
+
     public static void openOffset(BlockPos pos) {
         Minecraft.getInstance().setScreen(new com.mchoe.elevmod.client.screen.DeviceOffsetScreen(pos));
     }

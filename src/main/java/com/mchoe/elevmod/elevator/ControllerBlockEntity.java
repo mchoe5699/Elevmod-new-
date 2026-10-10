@@ -92,6 +92,21 @@ public class ControllerBlockEntity extends BlockEntity {
     /** 디자인 모드: 기본 디자인 / 커스텀 디자인(customDesign id) */
     public Spec.DesignMode designMode = Spec.DesignMode.BASIC;
     public String customDesign = "";
+    /** true = 모든 부위가 customDesign 하나로 통일, false = 부위별(partDesign) */
+    public boolean designUnified = true;
+    /** 부위별 커스텀 디자인 (CustomDesignIndex.PARTS 순서), "" = 기본 디자인 */
+    public final String[] partDesign = new String[CustomDesignIndex.PARTS.length];
+    {
+        java.util.Arrays.fill(partDesign, "");
+    }
+
+    /** 이 부위에 적용할 커스텀 디자인 id ("" = 기본 디자인) */
+    public String partId(String part) {
+        if (designMode != Spec.DesignMode.CUSTOM) return "";
+        if (designUnified) return customDesign;
+        for (int i = 0; i < CustomDesignIndex.PARTS.length; i++) if (CustomDesignIndex.PARTS[i].equals(part)) return partDesign[i];
+        return "";
+    }
     /** 복사(월드에딧·/clone) 감지를 위해 저장 당시 위치를 기록 */
     private boolean relocated;
     private boolean serialChecked;
@@ -1011,7 +1026,7 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putBoolean("ac", aircon);
         t.putBoolean("win", window && windowSide != 1);
         t.putInt("winm", windowMask);
-        t.putString("dsg", designMode == Spec.DesignMode.CUSTOM ? customDesign : "");
+        for (String part : new String[]{"car", "carDoor", "cop", "copAcc", "indicator"}) t.putString("dsg_" + part, partId(part));
         t.putBoolean("acc", accessibleCop && usage.passengerCar());
         t.putBoolean("stop", stopSwitch);
         t.putBoolean("dd", destination);
@@ -1064,6 +1079,12 @@ public class ControllerBlockEntity extends BlockEntity {
             if (!lvl.isLoaded(p)) continue;
             if (!(lvl.getBlockEntity(p) instanceof DeviceBlockEntity d)) continue;
             int fi = idxOfY(d.floorY);
+            if (d.getBlockState().getBlock() instanceof com.mchoe.elevmod.block.DeviceBlock db) d.setCtrlDesign(partId(switch (db.kind) {
+                case HALL_BUTTON, CALL_RECEIVER, FIRE_SWITCH -> "hallButton";
+                case HALL_PANEL, DESTINATION -> "hallPanel";
+                case LANTERN -> "lantern";
+                default -> "indicator";
+            }));
             boolean up = false, down = false, hasUp = false, hasDown = false;
             for (ControllerBlockEntity c : grp) {
                 int ci = c.idxOfY(d.floorY);
@@ -1544,7 +1565,7 @@ public class ControllerBlockEntity extends BlockEntity {
             if (lvl.getBlockEntity(c) instanceof LandingDoorBlockEntity be) {
                 int col = c.getX() * a.getStepX() + c.getZ() * a.getStepZ();
                 be.link(worldPosition, c.equals(d.master), col - minCol, c.getY() - minY, d.w, d.h);
-                be.style(doorType, theme, landingWindowMask(), jamb, rightHand(), effW(d.w), effH(d.h), designMode == Spec.DesignMode.CUSTOM ? customDesign : "");
+                be.style(doorType, theme, landingWindowMask(), jamb, rightHand(), effW(d.w), effH(d.h), partId("landing"));
             }
         }
         if (lobbyY == Integer.MIN_VALUE) lobbyY = minY;
@@ -1658,7 +1679,7 @@ public class ControllerBlockEntity extends BlockEntity {
     /** 설정 변경 후 문 모양 갱신 */
     private void refreshDoors(ServerLevel lvl) {
         for (Floor f : floors) for (Floor.Door d : f.doors) for (BlockPos c : d.cells) {
-            if (lvl.getBlockEntity(c) instanceof LandingDoorBlockEntity be) be.style(doorType, theme, landingWindowMask(), jamb, rightHand(), effW(d.w), effH(d.h), designMode == Spec.DesignMode.CUSTOM ? customDesign : "");
+            if (lvl.getBlockEntity(c) instanceof LandingDoorBlockEntity be) be.style(doorType, theme, landingWindowMask(), jamb, rightHand(), effW(d.w), effH(d.h), partId("landing"));
         }
     }
 
@@ -1720,6 +1741,22 @@ public class ControllerBlockEntity extends BlockEntity {
                     customDesign = ids.get(Math.floorMod(i + delta, ids.size()));
                     designMode = Spec.DesignMode.CUSTOM;
                 }
+            }
+            case "dunified" -> designUnified = !designUnified;
+            case "dpart" -> {
+                int pi = text.isEmpty() ? 0 : Integer.parseInt(text);
+                if (pi >= 0 && pi < partDesign.length) {
+                    java.util.List<String> ids = new ArrayList<>();
+                    ids.add("");
+                    ids.addAll(CustomDesignIndex.ids(CustomDesignIndex.PARTS[pi]));
+                    int i = ids.indexOf(partDesign[pi]);
+                    partDesign[pi] = ids.get(Math.floorMod(i + delta, ids.size()));
+                    designMode = Spec.DesignMode.CUSTOM;
+                    designUnified = false;
+                }
+            }
+            case "setdesign" -> { // 디자인 스튜디오에서 만든 디자인을 바로 적용
+                if (CustomDesignIndex.ids().contains(text)) { customDesign = text; designMode = Spec.DesignMode.CUSTOM; designUnified = true; }
             }
             case "serial" -> {
                 String v = text.trim();
@@ -1882,6 +1919,9 @@ public class ControllerBlockEntity extends BlockEntity {
         t.put("log", log);
         double h = floors.isEmpty() ? 0 : floors.get(floors.size() - 1).y - floors.get(0).y;
         t.putDouble("rise", h);
+        CompoundTag names = new CompoundTag();
+        for (String id : CustomDesignIndex.ids()) names.putString(id, CustomDesignIndex.name(id));
+        t.put("designNames", names);
         return t;
     }
 
@@ -1928,6 +1968,8 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putInt("windowMask", windowMask); t.putInt("windowSide", windowSide);
         t.putFloat("openSec", openSec); t.putFloat("closeSec", closeSec);
         t.putInt("designMode", designMode.ordinal()); t.putString("customDesign", customDesign);
+        t.putBoolean("designUnified", designUnified);
+        for (int i = 0; i < partDesign.length; i++) t.putString("pd_" + CustomDesignIndex.PARTS[i], partDesign[i]);
         t.putFloat("openAuto", doorType.seconds);
     }
 
@@ -1981,6 +2023,8 @@ public class ControllerBlockEntity extends BlockEntity {
         openSec = t.getFloat("openSec"); closeSec = t.getFloat("closeSec");
         designMode = en(Spec.DesignMode.values(), t.getInt("designMode"));
         customDesign = t.getString("customDesign");
+        designUnified = !t.contains("designUnified") || t.getBoolean("designUnified");
+        for (int i = 0; i < partDesign.length; i++) partDesign[i] = t.getString("pd_" + CustomDesignIndex.PARTS[i]);
     }
 
     private static <E extends Enum<E>> E en(E[] vals, int i) { return vals[Math.max(0, Math.min(i, vals.length - 1))]; }

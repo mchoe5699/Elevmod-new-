@@ -70,6 +70,27 @@ jobs:
           grep -iE "exception|error|elevmod" server.log | grep -viE "Downloading|DEBUG" | head -40 | while IFS= read -r line; do echo "::warning::${line}"; done
           if [ "$ok" = "1" ]; then echo "::notice::SERVER_BOOT_OK"; else echo "::error::SERVER_BOOT_FAILED"; tail -30 server.log | while IFS= read -r line; do echo "::error::${line}"; done; fi
 
+      - name: Production server test (built jar in a real Forge server)
+        continue-on-error: true
+        run: |
+          rm -f build/libs/*-slim.jar
+          ls -la build/libs
+          mkdir -p prod && cd prod
+          curl -sSL -o installer.jar https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.3.0/forge-1.20.1-47.3.0-installer.jar
+          java -jar installer.jar --installServer > install.log 2>&1 || tail -20 install.log
+          mkdir -p mods && cp ../build/libs/*.jar mods/
+          echo "eula=true" > eula.txt
+          printf 'online-mode=false\nlevel-type=minecraft\\:flat\n' > server.properties
+          (timeout 300 bash run.sh nogui > prod.log 2>&1 &) 
+          ok=0
+          for i in $(seq 1 70); do
+            if grep -q "Done (" prod.log; then ok=1; break; fi
+            sleep 4
+          done
+          grep -iE "elevmod|jarjar|twelvemonkeys|exception" prod.log | grep -v DEBUG | head -30 | while IFS= read -r line; do echo "::warning::PROD ${line}"; done
+          if [ "$ok" = "1" ]; then echo "::notice::PROD_SERVER_OK"; else echo "::error::PROD_SERVER_FAILED"; tail -40 prod.log | while IFS= read -r line; do echo "::error::PROD ${line}"; done; fi
+          pkill -f forge || true
+
       - name: Upload jar artifact
         uses: actions/upload-artifact@v4
         with:

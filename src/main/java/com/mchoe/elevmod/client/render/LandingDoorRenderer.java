@@ -47,7 +47,7 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
         float x1 = -0.5f + (W - cw) / 2f, x2 = x1 + cw;      // 유효 개구
         float left = -0.5f, right = W - 0.5f;                  // 문 칸 전체
         float revealZ = -0.32f;                                // 리빌 마감 시작(문짝 바로 앞)
-        CustomDesign cd = CustomDesigns.get(be.design);
+        CustomDesign cd = CustomDesigns.get(be.effectiveDesign());
         CustomDesign.Surface ds = cd == null ? null : cd.landingDoor != null ? cd.landingDoor : cd.door;
         String jt = cd != null && cd.jambTex != null ? cd.jambTex : th == Spec.Theme.GOLD ? "jamb_gold" : "jamb";
         VertexConsumer jamb = RenderUtil.solid(buf, jt);
@@ -68,7 +68,18 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
 
         // ---- 쟘(홀 쪽 테두리 틀)
         float jf = jb.face();
-        if (jf > 0) {
+        if (jf > 0 && cd != null && cd.jambFace != null) {
+            // 쟘 정면 사진: 틀 전체(좌·우·상)를 한 장으로 보고 각 조각에 해당 부분을 붙임
+            float head = jf * 1.3f, fw2 = cw + 2 * jf, fh2 = chh + head, fz = 0.52f;
+            float[][] pcs = {{x1 - jf, 0, x1, chh + head}, {x2, 0, x2 + jf, chh + head}, {x1, chh, x2, chh + head}};
+            for (float[] q : pcs) {
+                float[] uvw = {(q[0] - (x1 - jf)) / fw2, 1 - q[3] / fh2, (q[2] - (x1 - jf)) / fw2, 1 - q[1] / fh2};
+                Relief.draw(ps, buf, cd.jambFace, new Relief.Frame(q[0], q[1], fz, 1, 0, 0, 0, 1, 0, 0, 0, 1), q[2] - q[0], q[3] - q[1], light, null, uvw);
+            }
+            RenderUtil.box(ps, jamb, x1 - jf, 0, 0.5f, x1, chh + head, fz - 0.001f, light, WHITE);
+            RenderUtil.box(ps, jamb, x2, 0, 0.5f, x2 + jf, chh + head, fz - 0.001f, light, WHITE);
+            RenderUtil.box(ps, jamb, x1, chh, 0.5f, x2, chh + head, fz - 0.001f, light, WHITE);
+        } else if (jf > 0) {
             float fz1 = 0.5f, fz2 = 0.52f;
             float head = jf * 1.3f;
             RenderUtil.box(ps, jamb, x1 - jf, 0, fz1, x1, chh + head, fz2, light, WHITE);
@@ -99,6 +110,7 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
             boolean mirror = be.rightHand && t.sideOpening();
             List<float[]> rects = DoorLayout.panels(t, cw, chh, p);
             int[] rank = DoorLayout.rank(t, cw, chh, mirror);
+            List<float[]> closed = DoorLayout.panels(t, cw, chh, 0);
             for (int ri = 0; ri < rects.size(); ri++) {
                 float[] r = rects.get(ri);
                 float a1 = mirror ? cw - r[1] : r[0], a2 = mirror ? cw - r[0] : r[1];
@@ -110,7 +122,14 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
                 if (ds != null) {
                     // 승강장 쪽 면을 커스텀 디자인으로 (오목한 부분은 문짝 두께 안으로)
                     float[] lw = win == null ? null : new float[]{win[0] - px1, win[1] - r[2], win[2] - px1, win[3] - r[2]};
-                    Relief.draw(ps, buf, ds, new Relief.Frame(px1, r[2], z2, 1, 0, 0, 0, 1, 0, 0, 0, 1), px2 - px1, r[3] - r[2], light, lw);
+                    float[] uvw = null;
+                    if (cd.landingSpan) {
+                        // 출입구 전체 사진: 이 문짝이 닫혔을 때 차지하는 부분만 사용 (승강장에서 보는 방향)
+                        float[] k = closed.get(ri);
+                        float c1 = mirror ? cw - k[1] : k[0], c2 = mirror ? cw - k[0] : k[1];
+                        uvw = new float[]{c1 / cw, 1 - k[3] / chh, c2 / cw, 1 - k[2] / chh};
+                    }
+                    Relief.draw(ps, buf, ds, new Relief.Frame(px1, r[2], z2, 1, 0, 0, 0, 1, 0, 0, 0, 1), px2 - px1, r[3] - r[2], light, lw, uvw);
                 }
             }
         }

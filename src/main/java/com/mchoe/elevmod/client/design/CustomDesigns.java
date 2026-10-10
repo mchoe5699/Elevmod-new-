@@ -20,6 +20,7 @@ public final class CustomDesigns {
     @Nullable
     public static CustomDesign get(String id) {
         if (id == null || id.isEmpty()) return null;
+        if (id.startsWith("u_")) return RemoteDesigns.get(id);
         return CACHE.computeIfAbsent(id, k -> {
             if (!k.matches("[a-z0-9_]+")) return Optional.empty();
             try (InputStream in = CustomDesigns.class.getResourceAsStream("/assets/elevmod/designs/" + k + ".json")) {

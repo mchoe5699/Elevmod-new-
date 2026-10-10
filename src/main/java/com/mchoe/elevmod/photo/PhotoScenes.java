@@ -32,6 +32,8 @@ public final class PhotoScenes {
 
     public static final List<Shot> SHOTS = Collections.synchronizedList(new ArrayList<>());
     public static volatile boolean ready;
+    /** 디자인 스튜디오로 만든 사진 디자인 id (클라이언트가 올림) */
+    public static volatile String photoDesign = "";
     static final int Y0 = -60;
 
     private static void set(ServerLevel l, int x, int y, int z, BlockState s) { l.setBlock(new BlockPos(x, y, z), s, 3); }
@@ -219,6 +221,23 @@ public final class PhotoScenes {
         SHOTS.add(new Shot("74_modern_front", x + 0.5, Y0, -cw2.cd + 0.28, 0, 8, cw2.getBlockPos(), 0f, 0));
         SHOTS.add(new Shot("75_modern_side", x + 0.5, Y0, -cw2.cd / 2, 90, 10, cw2.getBlockPos(), 0f, 0));
         SHOTS.add(new Shot("76_modern_ceiling", x + 0.5, Y0, -cw2.cd / 2, 0, -75, cw2.getBlockPos(), 0f, 0));
+
+        // ---- L: 사진으로 만든 커스텀 디자인 (운전반·카 도어·승강장 문·층표시기·호출패널)
+        if (!photoDesign.isEmpty()) {
+            x += 10;
+            final String pd = photoDesign;
+            ControllerBlockEntity ph = elevator(l, p, x, 0, 3, 4, 1, 2, false, cc -> {
+                cc.usage = Spec.Usage.PASSENGER; cc.capIdx = 7; cc.designMode = Spec.DesignMode.CUSTOM; cc.customDesign = pd; cc.designUnified = true;
+            });
+            device(l, p, ph, ModRegistry.INDICATOR_SEGMENT.get(), x, Y0 + 2, 1);
+            device(l, p, ph, ModRegistry.HALL_PANEL.get(), x + 1, Y0, 1);
+            double hx = x + 0.5;
+            SHOTS.add(new Shot("80_photo_hall", hx + 0.3, Y0, 3.3, 180, 8, ph.getBlockPos(), 0f, 0));
+            SHOTS.add(new Shot("81_photo_car_front", hx, Y0, -ph.cd + 0.28, 0, 8, ph.getBlockPos(), 0f, 0));
+            float phCop = (float) (hx + (-ph.cw / 2 + ph.frontOff - ph.frontW / 2) / 2);
+            SHOTS.add(new Shot("82_photo_cop", phCop, Y0 - 0.15, -0.72, 0, 18, ph.getBlockPos(), 0f, 0));
+            SHOTS.add(new Shot("83_photo_hall_close", hx + 0.5, Y0 + 0.3, 1.9, 180, 10, ph.getBlockPos(), 0f, 0));
+        }
 
         // ---- H: 승강장 장치 의장 진열 (디자인 변경기로 바꿀 수 있는 것들)
         for (int xx = -22; xx <= 0; xx++) for (int y = Y0; y <= Y0 + 3; y++) set(l, xx, y, 32, Blocks.SMOOTH_QUARTZ.defaultBlockState());

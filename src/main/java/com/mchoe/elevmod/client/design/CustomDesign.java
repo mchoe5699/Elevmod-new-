@@ -19,8 +19,12 @@ import java.util.Locale;
 public final class CustomDesign {
     public final String id;
     public String nameKo = "", nameEn = "";
-    @Nullable public Surface wall, door, landingDoor, ceiling, cop, transom, frontWall;
+    @Nullable public Surface wall, backWall, door, landingDoor, ceiling, cop, transom, frontWall, jambFace;
     @Nullable public String floorTex, jambTex, sillTex, kickTex;
+    /** 문 사진이 출입구 전체(닫힌 문짝 모두)에 걸쳐 있음 → 문짝마다 자기 위치의 사진 조각을 씀 */
+    public boolean doorSpan, landingSpan, frontSpan;
+    /** 운전반·표시기·버튼 패널 부품 */
+    @Nullable public PanelPart copPart, accPart, indicator, hallButton, hallPanel, lantern;
     public float panelWidth = 0;          // 벽 판넬 폭(m), 0 = 기본(약 0.72m)
     public boolean mirror = true;         // 후면 거울 표시 여부
     @Nullable public Rail handrail;
@@ -78,6 +82,26 @@ public final class CustomDesign {
         }
     }
 
+    /**
+     * 판(운전반, 층표시기, 호출버튼, 호출패널, 홀랜턴): 앞면(face) + 실제로 동작하는 부품 위치.
+     * 좌표는 판에 대한 비율, y 는 아래 → 위.
+     */
+    public static final class PanelPart {
+        @Nullable public Surface face;
+        /** 버튼: {중심x, 중심y, 반지름(판 폭 비율)} – 위→아래, 왼→오른 순 */
+        public final List<float[]> buttons = new ArrayList<>();
+        /** 표시창 {x1,y1,x2,y2} */
+        @Nullable public float[] display;
+        /** 홀랜턴 램프 {x1,y1,x2,y2} – 0 = 상승, 1 = 하강 */
+        public final List<float[]> lamps = new ArrayList<>();
+        public String dispType = "seg";   // seg / dot / lcd
+        public int digit = 0xFFFF2A10, lit = 0xFFFFB020, lcdBg = 0xFF0E2E66;
+        /** 실제 크기(m) {폭, 높이}, 0 = 기본 */
+        public float w, h;
+        /** 사진에 이미 층 숫자가 있어도 모드의 층 이름을 버튼 위에 표시할지 */
+        public boolean labels = true;
+    }
+
     public static final class Rail {
         public String shape = "round"; // round / flat / none
         public float y = 0.9f, r = 0.018f;
@@ -98,9 +122,12 @@ public final class CustomDesign {
         return new float[]{a.get(0).getAsFloat(), a.get(1).getAsFloat()};
     }
 
-    static Surface surface(JsonObject o) {
+    /** "~이름" = 이 디자인에 들어 있는 사진 텍스처 */
+    private String tx(String t) { return t.startsWith("~") ? "@" + id + "/" + t.substring(1) : t; }
+
+    Surface surface(JsonObject o) {
         Surface s = new Surface();
-        if (o.has("tex")) s.tex = o.get("tex").getAsString();
+        if (o.has("tex")) s.tex = tx(o.get("tex").getAsString());
         s.color = col(o, "color", 0xFFFFFFFF);
         s.tile = o.has("tile") && o.get("tile").getAsBoolean();
         if (o.has("elements")) for (JsonElement je : o.getAsJsonArray("elements")) {
@@ -120,7 +147,7 @@ public final class CustomDesign {
             if (e.has("z")) el.z = e.get("z").getAsFloat();
             if (e.has("radius")) el.radius = e.get("radius").getAsFloat();
             if (e.has("axis")) el.axis = e.get("axis").getAsString().charAt(0);
-            if (e.has("tex")) el.tex = e.get("tex").getAsString();
+            if (e.has("tex")) el.tex = tx(e.get("tex").getAsString());
             el.color = col(e, "color", 0xFFFFFFFF);
             el.glow = e.has("glow") && e.get("glow").getAsBoolean();
             el.ownUv = e.has("uv") && e.get("uv").getAsString().equals("own");
@@ -132,24 +159,74 @@ public final class CustomDesign {
         return s;
     }
 
-    static CustomDesign parse(String id, JsonObject o) {
+    PanelPart panel(JsonObject o) {
+        PanelPart p = new PanelPart();
+        if (o.has("face")) p.face = surface(o.getAsJsonObject("face"));
+        if (o.has("buttons")) for (JsonElement e : o.getAsJsonArray("buttons")) {
+            JsonArray a = e.getAsJsonArray();
+            p.buttons.add(new float[]{a.get(0).getAsFloat(), a.get(1).getAsFloat(), a.size() > 2 ? a.get(2).getAsFloat() : 0.08f});
+        }
+        if (o.has("lamps")) for (JsonElement e : o.getAsJsonArray("lamps")) p.lamps.add(rect4(e));
+        if (o.has("display")) p.display = rect4(o.get("display"));
+        if (o.has("type")) p.dispType = o.get("type").getAsString();
+        p.digit = col(o, "digit", p.digit);
+        p.lit = col(o, "lit", p.lit);
+        p.lcdBg = col(o, "lcdBg", p.lcdBg);
+        if (o.has("size")) { float[] r = range(o.get("size")); p.w = r[0]; p.h = r[1]; }
+        if (o.has("labels")) p.labels = o.get("labels").getAsBoolean();
+        return p;
+    }
+
+    static float[] rect4(JsonElement e) {
+        JsonArray a = e.getAsJsonArray();
+        return new float[]{a.get(0).getAsFloat(), a.get(1).getAsFloat(), a.get(2).getAsFloat(), a.get(3).getAsFloat()};
+    }
+
+    /** 이 디자인이 해당 부위를 정의하는지 (부위 목록: car, carDoor, landing, cop, copAcc, indicator, hallButton, hallPanel, lantern) */
+    public boolean has(String part) {
+        return switch (part) {
+            case "car" -> wall != null || ceiling != null || frontWall != null || floorTex != null || backWall != null;
+            case "carDoor" -> door != null;
+            case "landing" -> landingDoor != null || door != null || jambTex != null || jambFace != null;
+            case "cop" -> copPart != null || cop != null;
+            case "copAcc" -> accPart != null;
+            case "indicator" -> indicator != null;
+            case "hallButton" -> hallButton != null;
+            case "hallPanel" -> hallPanel != null;
+            case "lantern" -> lantern != null;
+            default -> false;
+        };
+    }
+
+    public static CustomDesign parse(String id, JsonObject o) {
         CustomDesign d = new CustomDesign(id);
         if (o.has("name")) {
             JsonObject n = o.getAsJsonObject("name");
             if (n.has("ko")) d.nameKo = n.get("ko").getAsString();
             if (n.has("en")) d.nameEn = n.get("en").getAsString();
         }
-        if (o.has("wall")) d.wall = surface(o.getAsJsonObject("wall"));
-        if (o.has("frontWall")) d.frontWall = surface(o.getAsJsonObject("frontWall"));
-        if (o.has("door")) d.door = surface(o.getAsJsonObject("door"));
-        if (o.has("landingDoor")) d.landingDoor = surface(o.getAsJsonObject("landingDoor"));
-        if (o.has("ceiling")) d.ceiling = surface(o.getAsJsonObject("ceiling"));
-        if (o.has("cop")) d.cop = surface(o.getAsJsonObject("cop"));
-        if (o.has("transom")) d.transom = surface(o.getAsJsonObject("transom"));
-        if (o.has("floor")) d.floorTex = o.get("floor").getAsString();
-        if (o.has("jamb")) d.jambTex = o.get("jamb").getAsString();
-        if (o.has("sill")) d.sillTex = o.get("sill").getAsString();
-        if (o.has("kick")) d.kickTex = o.get("kick").getAsString();
+        if (o.has("wall")) d.wall = d.surface(o.getAsJsonObject("wall"));
+        if (o.has("frontWall")) d.frontWall = d.surface(o.getAsJsonObject("frontWall"));
+        if (o.has("door")) d.door = d.surface(o.getAsJsonObject("door"));
+        if (o.has("landingDoor")) d.landingDoor = d.surface(o.getAsJsonObject("landingDoor"));
+        if (o.has("ceiling")) d.ceiling = d.surface(o.getAsJsonObject("ceiling"));
+        if (o.has("cop")) d.cop = d.surface(o.getAsJsonObject("cop"));
+        if (o.has("transom")) d.transom = d.surface(o.getAsJsonObject("transom"));
+        if (o.has("backWall")) d.backWall = d.surface(o.getAsJsonObject("backWall"));
+        if (o.has("jambFace")) d.jambFace = d.surface(o.getAsJsonObject("jambFace"));
+        if (o.has("floor")) d.floorTex = d.tx(o.get("floor").getAsString());
+        if (o.has("jamb")) d.jambTex = d.tx(o.get("jamb").getAsString());
+        if (o.has("sill")) d.sillTex = d.tx(o.get("sill").getAsString());
+        if (o.has("kick")) d.kickTex = d.tx(o.get("kick").getAsString());
+        d.doorSpan = o.has("doorSpan") && o.get("doorSpan").getAsBoolean();
+        d.landingSpan = o.has("landingSpan") && o.get("landingSpan").getAsBoolean();
+        d.frontSpan = o.has("frontSpan") && o.get("frontSpan").getAsBoolean();
+        if (o.has("copPanel")) d.copPart = d.panel(o.getAsJsonObject("copPanel"));
+        if (o.has("copAcc")) d.accPart = d.panel(o.getAsJsonObject("copAcc"));
+        if (o.has("indicator")) d.indicator = d.panel(o.getAsJsonObject("indicator"));
+        if (o.has("hallButton")) d.hallButton = d.panel(o.getAsJsonObject("hallButton"));
+        if (o.has("hallPanel")) d.hallPanel = d.panel(o.getAsJsonObject("hallPanel"));
+        if (o.has("lantern")) d.lantern = d.panel(o.getAsJsonObject("lantern"));
         if (o.has("panelWidth")) d.panelWidth = o.get("panelWidth").getAsFloat();
         if (o.has("mirror")) d.mirror = o.get("mirror").getAsBoolean();
         if (o.has("handrail")) {

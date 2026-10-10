@@ -26,6 +26,49 @@ public final class PhotoBooth {
 
     private static final boolean ON = Boolean.getBoolean("elevmod.photo");
     private static int phase, wait, idx;
+    private static final java.util.List<java.nio.file.Path> SAMPLES = new java.util.ArrayList<>();
+    static final float[] COP_CORNERS = {304, 5, 613, 5, 603, 699, 336, 704};
+
+    /** CI 촬영용: 실제 엘리베이터 사진으로 커스텀 디자인을 만들어 서버에 올림 (디자인 스튜디오와 같은 경로) */
+    private static void uploadSampleDesign(Minecraft mc) {
+        try {
+            java.nio.file.Path dir = mc.gameDirectory.toPath().resolve("photo-samples");
+            if (!java.nio.file.Files.isDirectory(dir)) return;
+            java.util.List<com.mchoe.elevmod.client.studio.Photo> ph = new java.util.ArrayList<>();
+            Object[][] spec = {
+                    {"elevator_car_operating_panel_2.jpg", com.mchoe.elevmod.client.studio.Target.COP, COP_CORNERS},
+                    {"center_opening_elevator_doors_3.jpg", com.mchoe.elevmod.client.studio.Target.LANDING_DOOR, new float[]{348, 448, 668, 448, 668, 1152, 348, 1152}},
+                    {"center_opening_elevator_doors_3.jpg", com.mchoe.elevmod.client.studio.Target.CAR_DOOR, new float[]{348, 448, 668, 448, 668, 1152, 348, 1152}},
+                    {"elevator_floor_indicator_5.jpg", com.mchoe.elevmod.client.studio.Target.INDICATOR, new float[]{204, 209, 780, 209, 780, 408, 204, 408}},
+                    {"elevator_floor_indicator_3.jpg", com.mchoe.elevmod.client.studio.Target.HALL_PANEL, null}};
+            for (Object[] sp : spec) {
+                java.nio.file.Path f = dir.resolve((String) sp[0]);
+                if (!java.nio.file.Files.exists(f)) continue;
+                if (!SAMPLES.contains(f)) SAMPLES.add(f);
+                var p = new com.mchoe.elevmod.client.studio.Photo((String) sp[0], com.mchoe.elevmod.client.studio.ImageLoader.load(f));
+                p.target = (com.mchoe.elevmod.client.studio.Target) sp[1];
+                p.height = p.target.defHeight;
+                if (sp[2] != null) {
+                    float[] c = (float[]) sp[2];
+                    float k = p.img.getWidth() / 960f; // 원본 960px 기준 좌표
+                    for (int i = 0; i < 8; i++) p.corners[i] = c[i] * k;
+                }
+                ph.add(p);
+            }
+            if (ph.isEmpty()) return;
+            byte[] zip = com.mchoe.elevmod.client.studio.DesignBuilder.build("사진 테스트", ph);
+            String id = "u_phototest01";
+            int total = Math.max(1, (zip.length + com.mchoe.elevmod.network.DesignNet.CHUNK - 1) / com.mchoe.elevmod.network.DesignNet.CHUNK);
+            for (int i = 0; i < total; i++) {
+                byte[] part = java.util.Arrays.copyOfRange(zip, i * com.mchoe.elevmod.network.DesignNet.CHUNK, Math.min(zip.length, (i + 1) * com.mchoe.elevmod.network.DesignNet.CHUNK));
+                com.mchoe.elevmod.network.Net.CH.sendToServer(new com.mchoe.elevmod.network.DesignNet.Upload(id, "사진 테스트", i, total, part));
+            }
+            PhotoScenes.photoDesign = id;
+            ElevMod.LOG.info("[photo] sample design uploaded: {} bytes, {} photos", zip.length, ph.size());
+        } catch (Throwable t) {
+            ElevMod.LOG.error("[photo] sample design failed", t);
+        }
+    }
 
     @SubscribeEvent
     public static void tick(TickEvent.ClientTickEvent e) {
@@ -45,6 +88,7 @@ public final class PhotoBooth {
                 }
             }
             case 1 -> {
+                if (mc.level != null && mc.player != null && server != null && wait == 20) uploadSampleDesign(mc);
                 if (mc.level != null && mc.player != null && server != null && ++wait > 80) {
                     if (mc.screen != null) mc.setScreen(null);
                     ElevMod.LOG.info("[photo] building scenes");
@@ -68,7 +112,17 @@ public final class PhotoBooth {
                 if (wait > 55) { idx++; wait = 0; }
             }
             case 4 -> {
-                if (++wait > 40) { ElevMod.LOG.info("[photo] done"); mc.stop(); }
+                // 디자인 스튜디오 화면도 촬영 (사진을 넣고 운전반 사진을 선택한 상태)
+                if (wait == 0 && !SAMPLES.isEmpty()) {
+                    mc.options.hideGui = false;
+                    var scr = new com.mchoe.elevmod.client.screen.DesignStudioScreen(null, null);
+                    mc.setScreen(scr);
+                    scr.addFiles(SAMPLES);
+                    scr.select(0, COP_CORNERS);
+                }
+                wait++;
+                if (wait == 60 && !SAMPLES.isEmpty()) Screenshot.grab(mc.gameDirectory, "90_studio.png", mc.getMainRenderTarget(), c -> ElevMod.LOG.info("[photo] " + c.getString()));
+                if (wait > 80) { ElevMod.LOG.info("[photo] done"); mc.stop(); }
             }
             default -> {}
         }

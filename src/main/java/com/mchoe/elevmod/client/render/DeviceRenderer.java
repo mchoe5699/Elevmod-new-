@@ -3,6 +3,8 @@ package com.mchoe.elevmod.client.render;
 import com.mchoe.elevmod.block.DeviceBlock;
 import com.mchoe.elevmod.block.DeviceBlockEntity;
 import com.mchoe.elevmod.elevator.Spec;
+import com.mchoe.elevmod.client.design.CustomDesign;
+import com.mchoe.elevmod.client.design.CustomDesigns;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
@@ -35,6 +37,20 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
         float z = -0.5f + (float) k.depth / 16f + 0.0015f;
         float hw = (float) (k.x2 - k.x1) / 32f;
         float y1 = (float) k.y1 / 16f, y2 = (float) k.y2 / 16f;
+        // 커스텀 디자인(사진) 장치
+        CustomDesign cdd = CustomDesigns.get(d.effectiveDesign());
+        CustomDesign.PanelPart pp = cdd == null ? null : switch (k) {
+            case HALL_BUTTON -> cdd.hallButton;
+            case HALL_PANEL -> cdd.hallPanel;
+            case IND_SEGMENT, IND_DOT, IND_LCD, IND_LAMP -> cdd.indicator;
+            case LANTERN -> cdd.lantern;
+            default -> null;
+        };
+        if (pp != null) {
+            customDevice(d, k, pp, ps, buf, light, hw, y1, y2, 0);
+            ps.popPose();
+            return;
+        }
         // 판(본체)
         String plateTex = k == DeviceBlock.Kind.FIRE_SWITCH ? "fire_switch"
                 : k == DeviceBlock.Kind.IND_SEGMENT || k == DeviceBlock.Kind.IND_DOT ? "plate_black" : "plate_stainless";
@@ -164,6 +180,46 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
             case CALL_RECEIVER -> RenderUtil.fill(ps, buf, -0.015f, cy - 0.015f, z, 0.015f, cy + 0.015f, z + 0.004f, linked ? FULL : light, linked ? 0xFF30FF60 : 0xFF305030);
         }
         ps.popPose();
+    }
+
+    /** 사진으로 만든 장치: 사진 판 + 찾은 버튼/표시창/램프 자리에 실제 동작 */
+    private void customDevice(DeviceBlockEntity d, DeviceBlock.Kind k, CustomDesign.PanelPart pp, PoseStack ps, MultiBufferSource buf, int light,
+                              float hw, float y1, float y2, long time) {
+        float w = pp.w > 0 ? pp.w : hw * 2, h = pp.h > 0 ? pp.h : y2 - y1;
+        float cy = (y1 + y2) / 2, by = cy - h / 2;
+        float depth = (float) k.depth / 16f;
+        // 판 옆면(얇은 금속) + 사진 앞면
+        RenderUtil.box(ps, RenderUtil.solid(buf, "plate_stainless"), -w / 2, by, -0.5f, w / 2, by + h, -0.5f + depth - 0.0005f, light, WHITE);
+        float zf = -0.5f + depth;
+        PanelDraw.face(ps, buf, pp, -w / 2, by, w, h, zf, light);
+        float z = zf + (pp.face != null ? pp.face.maxRaise() : 0) + 0.0015f;
+        boolean linked = d.ctrl != null;
+        // 표시창
+        boolean isInd = k == DeviceBlock.Kind.IND_SEGMENT || k == DeviceBlock.Kind.IND_DOT || k == DeviceBlock.Kind.IND_LCD || k == DeviceBlock.Kind.IND_LAMP;
+        if (linked && (pp.display != null || isInd)) {
+            float[] r = pp.display != null ? pp.display : new float[]{0.08f, 0.15f, 0.92f, 0.85f};
+            PanelDraw.display(ps, buf, pp.dispType, pp.digit, pp.lcdBg, -w / 2 + r[0] * w, by + r[1] * h, -w / 2 + r[2] * w, by + r[3] * h, z, light, d.text, d.dir, d.moving);
+        }
+        // 호출 버튼: 찾은 버튼 중 위 = 상승, 아래 = 하강
+        if (k == DeviceBlock.Kind.HALL_BUTTON || k == DeviceBlock.Kind.HALL_PANEL) {
+            java.util.List<float[]> bt = new java.util.ArrayList<>(pp.buttons);
+            bt.sort((a, b2) -> Float.compare(b2[1], a[1]));
+            if (bt.isEmpty()) buttons(ps, buf, d, z, by + h * 0.62f, by + h * 0.3f, Math.min(w, h) * 0.3f, light, Spec.ButtonStyle.ROUND);
+            else {
+                float[] upB = d.hasUp ? bt.get(0) : null;
+                float[] dnB = d.hasDown ? bt.get(d.hasUp && bt.size() > 1 ? 1 : 0) : null;
+                if (upB != null && d.upLit) PanelDraw.ring(ps, buf, -w / 2 + upB[0] * w, by + upB[1] * h, upB[2] * w, z, pp.lit);
+                if (dnB != null && d.downLit) PanelDraw.ring(ps, buf, -w / 2 + dnB[0] * w, by + dnB[1] * h, dnB[2] * w, z, pp.lit);
+            }
+        }
+        // 홀랜턴 램프
+        if (k == DeviceBlock.Kind.LANTERN) {
+            boolean up = d.lanUp || d.lanAny, dn = d.lanDown || d.lanAny;
+            float[] ur = pp.lamps.size() > 0 ? pp.lamps.get(0) : new float[]{0.05f, 0.1f, 0.48f, 0.9f};
+            float[] dr = pp.lamps.size() > 1 ? pp.lamps.get(1) : new float[]{0.52f, 0.1f, 0.95f, 0.9f};
+            if (up) RenderUtil.quadZ(ps, RenderUtil.glass(buf, "white"), -w / 2 + ur[0] * w, by + ur[1] * h, -w / 2 + ur[2] * w, by + ur[3] * h, z, true, RenderUtil.FULL, 0xA030FF60);
+            if (dn) RenderUtil.quadZ(ps, RenderUtil.glass(buf, "white"), -w / 2 + dr[0] * w, by + dr[1] * h, -w / 2 + dr[2] * w, by + dr[3] * h, z, true, RenderUtil.FULL, 0xA0FF3020);
+        }
     }
 
     private static final int[] SEG_COLORS = {0xFFFF2A10, 0xFF30FF50, 0xFFFF9A10, 0xFF40A8FF};

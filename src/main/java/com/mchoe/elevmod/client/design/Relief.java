@@ -36,6 +36,7 @@ public final class Relief {
 
     private static final class Ctx {
         PoseStack ps; MultiBufferSource buf; Frame f; float W, H; CustomDesign.Surface s; int light;
+        @Nullable float[] uvWin;
     }
 
     private static void quad(Ctx c, VertexConsumer vc, float[][] pts, float[][] uv, float[] n, int light, int col) {
@@ -53,6 +54,7 @@ public final class Relief {
     private static float[] uv(Ctx c, float x, float y, @Nullable float[] own) {
         if (own != null) return new float[]{(x - own[0]) / Math.max(1e-4f, own[2] - own[0]), 1 - (y - own[1]) / Math.max(1e-4f, own[3] - own[1])};
         if (c.s.tile) return new float[]{x, c.H - y};
+        if (c.uvWin != null) return new float[]{c.uvWin[0] + x / c.W * (c.uvWin[2] - c.uvWin[0]), c.uvWin[1] + (1 - y / c.H) * (c.uvWin[3] - c.uvWin[1])};
         return new float[]{x / c.W, 1 - y / c.H};
     }
 
@@ -106,7 +108,13 @@ public final class Relief {
      * 면 하나를 그린다. hole = 추가로 비울 구멍(방범창 등, 면 좌표) – 그 자리는 바탕을 그리지 않는다.
      */
     public static void draw(PoseStack ps, MultiBufferSource buf, CustomDesign.Surface s, Frame f, float W, float H, int light, @Nullable float[] hole) {
+        draw(ps, buf, s, f, W, H, light, hole, null);
+    }
+
+    /** uvWin = 이 면이 쓰는 사진 조각 {u1, v1(위), u2, v2(아래)} – 출입구 전체 사진을 문짝마다 나눠 쓸 때 */
+    public static void draw(PoseStack ps, MultiBufferSource buf, CustomDesign.Surface s, Frame f, float W, float H, int light, @Nullable float[] hole, @Nullable float[] uvWin) {
         Ctx c = new Ctx();
+        c.uvWin = uvWin;
         c.ps = ps; c.buf = buf; c.f = f; c.W = W; c.H = H; c.s = s; c.light = light;
         // 1) 구멍 목록
         List<float[]> holes = new ArrayList<>();

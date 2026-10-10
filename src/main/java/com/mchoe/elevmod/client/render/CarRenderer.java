@@ -84,7 +84,11 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         c.disp = en(Spec.Display.values(), st.getInt("disp"));
         c.tenkey = st.getBoolean("tenkey");
         c.cbtn = !st.contains("cbtn") || st.getBoolean("cbtn");
-        c.cd = CustomDesigns.get(st.getString("dsg"));
+        c.cd = CustomDesigns.get(st.getString("dsg_car"));
+        c.cdDoor = CustomDesigns.get(st.getString("dsg_carDoor"));
+        c.cdCop = CustomDesigns.get(st.getString("dsg_cop"));
+        c.cdAcc = CustomDesigns.get(st.getString("dsg_copAcc"));
+        c.cdInd = CustomDesigns.get(st.getString("dsg_indicator"));
         c.car = car;
 
         if (c.usage == Spec.Usage.WHEELCHAIR_LIFT) renderLift(c);
@@ -100,7 +104,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         Spec.Usage usage; Spec.Drive drive; Spec.DoorType dt; Spec.Theme theme; Spec.Ceiling ceiling;
         Spec.WallFinish wallF; Spec.FloorFinish floorF; Spec.ButtonStyle copSt, accSt; Spec.Display disp;
         boolean lights, emg, glass, right, tenkey, cbtn;
-        CustomDesign cd;
+        CustomDesign cd, cdDoor, cdCop, cdAcc, cdInd;
     }
 
     private String wallTex(Ctx c) {
@@ -156,7 +160,8 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
             case WOOD -> "floor_wood";
             default -> freight ? "floor_checker" : c.usage == Spec.Usage.PATERNOSTER ? "panel_wood" : "floor_granite";
         };
-        RenderUtil.box(ps, RenderUtil.solid(buf, floorTex), -w / 2, -0.1f, -d / 2, w / 2, 0, d / 2 - T, c.il, WHITE);
+        if (floorTex.startsWith("@")) RenderUtil.panel(ps, RenderUtil.solid(buf, floorTex), -w / 2, -0.1f, -d / 2, w / 2, 0, d / 2 - T, c.il, WHITE); // 사진 바닥: 한 장으로
+        else RenderUtil.box(ps, RenderUtil.solid(buf, floorTex), -w / 2, -0.1f, -d / 2, w / 2, 0, d / 2 - T, c.il, WHITE);
         RenderUtil.box(ps, steel, -w / 2 - T, -0.22f, -d / 2 - T, w / 2 + T, -0.1f, d / 2, c.light, WHITE);
 
         // ---- 측면 벽 (외피 + 내부 판넬)
@@ -232,7 +237,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
     /** 측벽(side=true, sx=±1) 또는 후면 벽의 판넬 분할 */
     private void wallPanels(Ctx c, VertexConsumer wall, boolean tiled, boolean side, int sx, float a, float b) {
         float len = b - a;
-        CustomDesign.Surface cw = c.cd != null ? c.cd.wall : null;
+        CustomDesign.Surface cw = c.cd == null ? null : !side && c.cd.backWall != null ? c.cd.backWall : c.cd.wall;
         float pwid = c.cd != null && c.cd.panelWidth > 0 ? c.cd.panelWidth : 0.72f;
         int n = Math.max(1, Math.round(len / pwid));
         float gap = 0.008f, seg = (len - gap * (n - 1)) / n;
@@ -287,7 +292,14 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
                 CustomDesign.Surface srf = q[1] > 0 && c.cd.transom != null ? c.cd.transom : fwS;
                 Relief.Frame f = dir > 0 ? new Relief.Frame(q[2], q[1], zin, -1, 0, 0, 0, 1, 0, 0, 0, -1)
                         : new Relief.Frame(q[0], q[1], zin, 1, 0, 0, 0, 1, 0, 0, 0, 1);
-                Relief.draw(c.ps, c.buf, srf, f, q[2] - q[0], q[3] - q[1], c.il, null);
+                float[] uvw = null;
+                if (c.cd.frontSpan && srf == fwS) {
+                    // 정면 벽 전체 사진: 조각마다 자기 자리 (안에서 볼 때 왼쪽 = +X)
+                    float tw = w + 2 * T, xl = w / 2 + T;
+                    uvw = dir > 0 ? new float[]{(xl - q[2]) / tw, 1 - q[3] / h, (xl - q[0]) / tw, 1 - q[1] / h}
+                            : new float[]{(q[0] + xl) / tw, 1 - q[3] / h, (q[2] + xl) / tw, 1 - q[1] / h};
+                }
+                Relief.draw(c.ps, c.buf, srf, f, q[2] - q[0], q[3] - q[1], c.il, null, uvw);
             }
         }
         if (l > -w / 2 - T) RenderUtil.panel(c.ps, ret, -w / 2 - T, 0, z1, l, h, z2, c.il, WHITE);
@@ -324,7 +336,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
             float z2 = rear ? plane - k : plane + k + 0.006f;
             if (r[5] == 1) { RenderUtil.fill(c.ps, c.buf, x1, r[2], z1, x2, r[3], z2, c.il, 0xFF6E7378); continue; }
             float[] win = glass ? null : RenderUtil.windowRect(DoorLayout.hasWindow(wm, rank[ri]), x1, x2, r[2], r[3]);
-            CustomDesign.Surface ds = c.cd != null ? c.cd.door : null;
+            CustomDesign.Surface ds = c.cdDoor != null ? c.cdDoor.door : null;
             RenderUtil.doorPanel(c.ps, c.buf, vc, x1, r[2], z1, x2, r[3], z2, win, ds == null || !rear, ds == null || rear, c.il, WHITE);
             if (ds != null) {
                 // 카 안쪽 면: 실내에서 볼 때 왼쪽→오른쪽 좌표계. 오목한 부분이 보이도록 깊이만큼 실내 쪽으로 띄움
@@ -339,7 +351,14 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
                     f = new Relief.Frame(x1, r[2], z2 + lift, 1, 0, 0, 0, 1, 0, 0, 0, 1);
                     if (win != null) lw = new float[]{win[0] - x1, win[1] - r[2], win[2] - x1, win[3] - r[2]};
                 }
-                Relief.draw(c.ps, c.buf, ds, f, pw, ph, c.il, lw);
+                float[] uvw = null;
+                if (c.cdDoor.doorSpan) {
+                    // 카 안에서 찍은 출입구 전체 사진: 이 문짝이 닫혔을 때 차지하는 부분
+                    float[] kk = DoorLayout.panels(type, W, H, 0).get(ri);
+                    float c1 = mirror ? W - kk[1] : kk[0], c2 = mirror ? W - kk[0] : kk[1];
+                    uvw = new float[]{(W - c2) / W, 1 - kk[3] / H, (W - c1) / W, 1 - kk[2] / H};
+                }
+                Relief.draw(c.ps, c.buf, ds, f, pw, ph, c.il, lw, uvw);
                 // 띄운 만큼 문짝 옆면을 막음
                 if (lift > 0.002f) {
                     float za = rear ? z2 : z1 - lift, zb = rear ? z2 + lift : z1;
@@ -489,12 +508,14 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
                 ps.mulPose(Axis.YP.rotationDegrees(cop.wall() > 0 ? -90 : 90));
                 pw = b[5] - b[2];
             }
-            if (c.cd != null && c.cd.cop != null) {
-                float off = c.cd.cop.maxRecess() + 0.0015f;
-                Relief.draw(ps, c.buf, c.cd.cop, new Relief.Frame(-pw / 2, b[1], off, 1, 0, 0, 0, 1, 0, 0, 0, 1), pw, b[4] - b[1], c.il, null);
-                ps.translate(0, 0, off + 0.0005f);
+            CustomDesign.PanelPart pp = c.cdCop != null ? c.cdCop.copPart : null;
+            CustomDesign.Surface face = pp != null ? pp.face : c.cdCop != null ? c.cdCop.cop : null;
+            if (face != null) {
+                float off = face.maxRecess() + 0.0015f;
+                Relief.draw(ps, c.buf, face, new Relief.Frame(-pw / 2, b[1], off, 1, 0, 0, 0, 1, 0, 0, 0, 1), pw, b[4] - b[1], c.il, null);
+                ps.translate(0, 0, off + face.maxRaise() + 0.0005f);
             }
-            copFace(c, pw, b[1], b[4]);
+            if (pp == null || !customCopFace(c, pp, pw, b[1], b[4], c.copSt)) copFace(c, pw, b[1], b[4]);
             ps.popPose();
             ps.popPose();
         }
@@ -525,36 +546,36 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
 
     /** 위치표시 창: 소자 종류에 따라 7세그먼트 / 도트매트릭스 / LCD */
     private void indicator(Ctx c, float x1, float y1, float x2, float y2, float z, String cur, int dir) {
-        PoseStack ps = c.ps;
-        MultiBufferSource buf = c.buf;
-        float h = y2 - y1, cy = (y1 + y2) / 2, wdt = x2 - x1;
-        float ax = x1 + wdt * 0.17f, tx = x1 + wdt * 0.6f, tw = wdt * 0.7f;
-        switch (c.disp) {
-            case SEGMENT -> {
-                Glyphs.rect(ps, buf, x1, y1, x2, y2, z, RenderUtil.FULL, 0xFF140404);
-                String t = pad2(cur);
-                float gh = Math.min(h * 0.72f, tw / (t.length() * 0.56f + (t.length() - 1) * 0.2f));
-                int red = 0xFFFF2A10;
-                Glyphs.arrow(ps, buf, ax, cy + gh * 0.3f, gh * 0.36f, 1, z + 0.0004f, dir > 0 ? RenderUtil.FULL : c.il, dir > 0 ? red : Glyphs.dim(red, 0.14f));
-                Glyphs.arrow(ps, buf, ax, cy - gh * 0.3f, gh * 0.36f, -1, z + 0.0004f, dir < 0 ? RenderUtil.FULL : c.il, dir < 0 ? red : Glyphs.dim(red, 0.14f));
-                Glyphs.seg(ps, buf, t, tx, cy, gh, z + 0.0004f, c.il, red, 0.13f);
-            }
-            case DOT -> {
-                Glyphs.rect(ps, buf, x1, y1, x2, y2, z, RenderUtil.FULL, 0xFF0C0806);
-                float gh = Math.min(h * 0.74f, tw / (cur.length() * 5f / 7f + (cur.length() - 1) / 7f));
-                int amber = 0xFFFF8A18;
-                float scroll = 0;
-                if (c.st.getInt("dir") != 0 && Minecraft.getInstance().level != null) scroll = (Minecraft.getInstance().level.getGameTime() % 14) / 14f;
-                if (dir != 0) Glyphs.dots(ps, buf, dir > 0 ? "^" : "v", ax, cy, Math.min(gh, wdt * 0.26f * 7 / 5), z + 0.0004f, c.il, amber, 0.1f, scroll);
-                else Glyphs.dots(ps, buf, " ", ax, cy, Math.min(gh, wdt * 0.26f * 7 / 5), z + 0.0004f, c.il, amber, 0.1f, 0);
-                Glyphs.dots(ps, buf, cur, tx, cy, gh, z + 0.0004f, c.il, amber, 0.1f, 0);
-            }
-            case LCD -> {
-                Glyphs.rect(ps, buf, x1, y1, x2, y2, z, RenderUtil.FULL, 0xFF0E2E66);
-                RenderUtil.text(ps, buf, RenderUtil.arrow(dir), ax, cy, z + 0.001f, h * 0.5f, 0xFF7FE3FF);
-                RenderUtil.text(ps, buf, cur, tx, cy, z + 0.001f, h * 0.7f, WHITE);
-            }
+        String type = switch (c.disp) { case DOT -> "dot"; case LCD -> "lcd"; default -> "seg"; };
+        int col = switch (c.disp) { case DOT -> 0xFFFF8A18; case LCD -> 0xFF7FE3FF; default -> 0xFFFF2A10; };
+        PanelDraw.display(c.ps, c.buf, type, col, 0xFF0E2E66, x1, y1, x2, y2, z, c.il, cur, dir, c.st.getInt("dir") != 0);
+    }
+
+    /**
+     * 사진으로 만든 운전반: 사진에서 찾은 표시창 자리에 실제 층 표시, 찾은 버튼 자리에 층 배정·불빛.
+     * 버튼이 층 수보다 적게 찾아졌으면 false (기본 버튼 배열을 사진 위에 그림).
+     */
+    private boolean customCopFace(Ctx c, CustomDesign.PanelPart pp, float pw, float y1, float y2, Spec.ButtonStyle st) {
+        ListTag names = c.st.getList("n", Tag.TAG_STRING);
+        byte[] calls = c.st.getByteArray("c");
+        int n = names.size();
+        float H = y2 - y1, x0 = -pw / 2;
+        String cur = n > 0 ? names.getString(Math.max(0, Math.min(c.st.getInt("cur"), n - 1))) : "";
+        if (pp.display != null) {
+            float[] d = pp.display;
+            PanelDraw.display(c.ps, c.buf, pp.dispType, pp.digit, pp.lcdBg, x0 + d[0] * pw, y1 + d[1] * H, x0 + d[2] * pw, y1 + d[3] * H, 0.001f, c.il, cur, c.st.getInt("dir"), c.st.getInt("dir") != 0);
         }
+        if (!c.cbtn || c.tenkey || pp.buttons.size() < n) return false;
+        int[] fl = PanelDraw.assignFloors(pp.buttons, n);
+        for (int i = 0; i < pp.buttons.size(); i++) {
+            if (fl[i] < 0) continue;
+            float[] b = pp.buttons.get(i);
+            float bx = x0 + b[0] * pw, by = y1 + b[1] * H, br = b[2] * pw;
+            boolean lit = fl[i] < calls.length && (calls[fl[i]] & 1) != 0;
+            if (lit) PanelDraw.ring(c.ps, c.buf, bx, by, br, 0.002f, pp.lit);
+            if (pp.labels) RenderUtil.text(c.ps, c.buf, names.getString(fl[i]), bx, by, 0.003f, br * 0.9f, lit ? pp.lit : 0xFF202020);
+        }
+        return true;
     }
 
     /** 운전반 면 그리기 (로컬: x ∈ [-pw/2, pw/2], z=0 이 면, +Z 가 사람 쪽) */
@@ -672,6 +693,13 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         ps.translate(leftWall ? b[0] : b[3], 0, (b[2] + b[5]) / 2);
         ps.mulPose(Axis.YP.rotationDegrees(leftWall ? -90 : 90)); // +Z 가 카 안쪽
         float len = b[5] - b[2];
+        CustomDesign.PanelPart ap = c.cdAcc != null ? c.cdAcc.accPart : null;
+        if (ap != null && ap.face != null) {
+            float off = ap.face.maxRecess() + 0.0015f;
+            Relief.draw(ps, c.buf, ap.face, new Relief.Frame(-len / 2, b[1], off, 1, 0, 0, 0, 1, 0, 0, 0, 1), len, b[4] - b[1], c.il, null);
+            ps.translate(0, 0, off + ap.face.maxRaise() + 0.0005f);
+            if (customCopFace(c, ap, len, b[1], b[4], c.accSt)) { ps.popPose(); return; }
+        }
         ListTag names = c.st.getList("n", Tag.TAG_STRING);
         byte[] calls = c.st.getByteArray("c");
         int n = names.size();
@@ -725,12 +753,21 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         int n = names.size();
         float z = c.d / 2 - T;
         // 테두리(스테인리스 프레임)
-        RenderUtil.fill(c.ps, c.buf, b[0] - 0.012f, b[1] - 0.012f, z - 0.004f, b[3] + 0.012f, b[4] + 0.012f, z, c.il, 0xFF9AA0A6);
+        if (c.cdInd == null || c.cdInd.indicator == null)
+            RenderUtil.fill(c.ps, c.buf, b[0] - 0.012f, b[1] - 0.012f, z - 0.004f, b[3] + 0.012f, b[4] + 0.012f, z, c.il, 0xFF9AA0A6);
         c.ps.pushPose();
         c.ps.translate(c.fo, 0, z - 0.005f);
         c.ps.mulPose(Axis.YP.rotationDegrees(180));
         String cur = n == 0 ? "" : names.getString(Math.max(0, Math.min(c.st.getInt("cur"), n - 1)));
-        indicator(c, -0.16f, b[1], 0.16f, b[4], 0, cur, c.st.getInt("dir"));
+        CustomDesign.PanelPart ip = c.cdInd != null ? c.cdInd.indicator : null;
+        if (ip != null) {
+            // 사진 표시기: 판 크기 = 사진 비율(높이는 트랜섬에 맞춤)
+            float hh = b[4] - b[1], ww = ip.w > 0 && ip.h > 0 ? Math.min(0.9f, hh * ip.w / ip.h) : 0.32f;
+            PanelDraw.face(c.ps, c.buf, ip, -ww / 2, b[1], ww, hh, 0.0005f, c.il);
+            float zf = (ip.face != null ? ip.face.maxRaise() : 0) + 0.0015f;
+            float[] d = ip.display != null ? ip.display : new float[]{0.1f, 0.15f, 0.9f, 0.85f};
+            PanelDraw.display(c.ps, c.buf, ip.dispType, ip.digit, ip.lcdBg, -ww / 2 + d[0] * ww, b[1] + d[1] * hh, -ww / 2 + d[2] * ww, b[1] + d[3] * hh, zf, c.il, cur, c.st.getInt("dir"), c.st.getInt("dir") != 0);
+        } else indicator(c, -0.16f, b[1], 0.16f, b[4], 0, cur, c.st.getInt("dir"));
         c.ps.popPose();
         c.ps.popPose();
     }

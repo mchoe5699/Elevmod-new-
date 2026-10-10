@@ -29,6 +29,26 @@ public class DeviceBlockEntity extends BlockEntity {
     public boolean redstoneLast;
     /** 의장 번호 (종류별 의미는 designKey 참고) */
     public int design;
+    /** 제어반이 지정한 커스텀 디자인 id, 이 장치만의 선택("" = 제어반 따름, "-" = 기본 디자인 고정, 그 외 = 디자인 id) */
+    public String ctrlDesign = "", customSel = "";
+
+    /** 실제로 쓸 커스텀 디자인 id ("" = 기본 디자인) */
+    public String effectiveDesign() { return customSel.equals("-") ? "" : !customSel.isEmpty() ? customSel : ctrlDesign; }
+
+    public void setCtrlDesign(String id) {
+        if (id.equals(ctrlDesign)) return;
+        ctrlDesign = id;
+        hash = 0;
+        sync();
+    }
+
+    public void setCustomSel(String sel, int basic) {
+        customSel = sel;
+        design = basic;
+        hash = 0;
+        sync();
+    }
+
     /** 설치 위치 미세 조정 (1/16 블록 단위). offX + = 정면에서 볼 때 오른쪽, offY + = 위 */
     public int offX, offY;
     public static final int OFF_LIMIT = 16;
@@ -127,6 +147,7 @@ public class DeviceBlockEntity extends BlockEntity {
                 | (hasUp ? 64 : 0) | (hasDown ? 128 : 0) | (dumbwaiter ? 256 : 0) | (redstoneLast ? 512 : 0);
         t.putInt("fl", flags);
         t.putInt("design", design);
+        t.putString("cdes", ctrlDesign); t.putString("csel", customSel);
         t.putInt("offX", offX); t.putInt("offY", offY);
         t.putLong("origin", worldPosition.asLong());
         ListTag l = new ListTag();
@@ -149,6 +170,7 @@ public class DeviceBlockEntity extends BlockEntity {
         upLit = (f & 16) != 0; downLit = (f & 32) != 0; hasUp = (f & 64) != 0; hasDown = (f & 128) != 0;
         dumbwaiter = (f & 256) != 0; redstoneLast = (f & 512) != 0;
         design = t.getInt("design");
+        ctrlDesign = t.getString("cdes"); customSel = t.getString("csel");
         offX = t.getInt("offX"); offY = t.getInt("offY");
         if (t.contains("origin")) {
             BlockPos o = BlockPos.of(t.getLong("origin"));

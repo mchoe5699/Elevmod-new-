@@ -56,11 +56,38 @@ minecraft {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
+    mavenCentral()
 }
+
+// 사진 형식 추가 지원(WebP, PSD, TGA, ICO, CMYK JPEG 등) – jar 안에 함께 넣음(Jar-in-Jar)
+jarJar.enable()
+
+def tmVersion = '3.10.1'
+def tmLibs = [
+        ['com.twelvemonkeys.common', 'common-lang'], ['com.twelvemonkeys.common', 'common-io'], ['com.twelvemonkeys.common', 'common-image'],
+        ['com.twelvemonkeys.imageio', 'imageio-core'], ['com.twelvemonkeys.imageio', 'imageio-metadata'],
+        ['com.twelvemonkeys.imageio', 'imageio-webp'], ['com.twelvemonkeys.imageio', 'imageio-psd'], ['com.twelvemonkeys.imageio', 'imageio-tga'],
+        ['com.twelvemonkeys.imageio', 'imageio-bmp'], ['com.twelvemonkeys.imageio', 'imageio-pnm'], ['com.twelvemonkeys.imageio', 'imageio-pcx'],
+        ['com.twelvemonkeys.imageio', 'imageio-sgi'], ['com.twelvemonkeys.imageio', 'imageio-iff'], ['com.twelvemonkeys.imageio', 'imageio-pict'],
+        ['com.twelvemonkeys.imageio', 'imageio-icns'], ['com.twelvemonkeys.imageio', 'imageio-hdr'], ['com.twelvemonkeys.imageio', 'imageio-jpeg'],
+        ['com.twelvemonkeys.imageio', 'imageio-tiff']]
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    tmLibs.each { lib ->
+        minecraftLibrary("${lib[0]}:${lib[1]}:${tmVersion}") { transitive = false }
+        jarJar(group: lib[0], name: lib[1], version: "[${tmVersion},4.0)") {
+            transitive = false
+            jarJar.pin(it, tmVersion)
+        }
+    }
 }
+
+// 배포 jar = 라이브러리를 포함한 jarJar 결과물 (분류자 없음), 일반 jar 는 slim
+tasks.named('jarJar').configure { archiveClassifier.set('') }
+tasks.named('jar', Jar).configure { archiveClassifier.set('slim') }
+reobf { jarJar { } }
+tasks.named('jarJar').configure { finalizedBy 'reobfJarJar' }
 
 tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [

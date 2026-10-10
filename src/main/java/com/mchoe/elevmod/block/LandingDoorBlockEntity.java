@@ -36,6 +36,12 @@ public class LandingDoorBlockEntity extends BlockEntity {
     public float target, speed = 0.025f;
     /** 디자인 변경기로 지정한 이 층 문 마감/쟘 (-1 = 제어반 설정을 따름) */
     public int finish = -1, jambOverride = -1;
+    /** 이 층만의 커스텀 디자인 선택: "" = 제어반 따름, "-" = 기본(마감 finish), 그 외 = 디자인 id */
+    public String customSel = "";
+
+    public String effectiveDesign() { return customSel.equals("-") ? "" : !customSel.isEmpty() ? customSel : design; }
+
+    public void setSel(String sel, int fin) { customSel = sel; finish = fin; sync(); }
     public int manualTicks;
     /** 삼각키로 수동 개방 중 (카 도어와 무관하게 움직임) */
     public boolean manual;
@@ -165,6 +171,7 @@ public class LandingDoorBlockEntity extends BlockEntity {
         t.putFloat("target", target); t.putFloat("speed", speed);
         t.putInt("finish", finish); t.putInt("jambO", jambOverride);
         t.putBoolean("manual", manual);
+        t.putString("csel", customSel);
         t.putLong("origin", worldPosition.asLong());
     }
 
@@ -183,6 +190,7 @@ public class LandingDoorBlockEntity extends BlockEntity {
         speed = t.contains("speed") ? t.getFloat("speed") : 0.025f;
         finish = t.contains("finish") ? t.getInt("finish") : -1;
         manual = t.getBoolean("manual");
+        customSel = t.getString("csel");
         // 복사·붙여넣기 되면 연결된 제어반 좌표도 같이 옮긴다 (복사본끼리 연결 유지)
         if (t.contains("origin") && ctrl != null) {
             BlockPos o = BlockPos.of(t.getLong("origin"));

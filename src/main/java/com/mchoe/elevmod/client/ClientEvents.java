@@ -104,4 +104,10 @@ public final class ClientEvents {
             }
         }
     }
+
+    /** 서버를 나가면 받은 사용자 디자인 정리 */
+    @SubscribeEvent
+    public static void loggedOut(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut e) {
+        com.mchoe.elevmod.client.design.RemoteDesigns.clear();
+    }
 }

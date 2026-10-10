@@ -30,6 +30,16 @@ jobs:
           mkdir -p run/config
           printf 'onboardAccessibility:false\npauseOnLostFocus:false\ntutorialStep:none\nrenderDistance:6\nsimulationDistance:6\nguiScale:2\nnarrator:0\nsoundCategory_master:0.0\njoinedFirstServer:true\nskipMultiplayerWarning:true\ngraphicsMode:1\nentityShadows:false\nfov:0.0\n' > run/options.txt
           printf 'earlyWindowControl = false\n' > run/config/fml.toml
+      - name: Sample photos for the design studio test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p run/photo-samples
+          gh release download reference-photos -p reference.zip -D /tmp/ref || true
+          if [ -f /tmp/ref/reference.zip ]; then unzip -q -o /tmp/ref/reference.zip -d /tmp/ref/x; fi
+          for f in elevator_car_operating_panel_2.jpg center_opening_elevator_doors_3.jpg elevator_floor_indicator_5.jpg elevator_floor_indicator_3.jpg; do
+            find /tmp/ref/x -name "$f" -exec cp {} run/photo-samples/ \; ; done
+          ls -la run/photo-samples
       - name: Run client and take screenshots
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
