@@ -42,7 +42,7 @@ jobs:
           timeout 900 gradle runGameTestServer --no-daemon > gametest.log 2>&1
           code=$?
           set -e
-          grep -E "GameTest|gametest|passed|failed|required tests|elevmod" gametest.log | grep -vE "DEBUG|Downloading" | tail -60 | while IFS= read -r line; do echo "::warning::${line}"; done
+          grep -nE "required tests|tests? (were )?(passed|failed)|Exception|Caused by|elevmodgametests|elevatorgametests|Test .*(failed|passed)|GameTestBatch|Running test" gametest.log | grep -v DEBUG | head -70 | while IFS= read -r line; do echo "::warning::GT ${line}"; done
           if [ "$code" = "0" ]; then echo "::notice::GAMETESTS_PASSED"; else echo "::error::GAMETESTS_FAILED exit=$code"; grep -iE "exception|error|assert" -A2 gametest.log | head -40 | while IFS= read -r line; do echo "::error::${line}"; done; fi
 
       - name: Dedicated server boot test
