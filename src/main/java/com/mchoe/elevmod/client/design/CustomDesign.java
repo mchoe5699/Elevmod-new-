@@ -38,6 +38,21 @@ public final class CustomDesign {
         public boolean tile;           // true = 1m 반복, false = 면 전체에 늘여 붙임
         public final List<El> els = new ArrayList<>();
 
+        /** 볼록 요소의 최대 높이 (앞에 붙는 운전반·표시기를 그만큼 띄움) */
+        public float maxRaise() {
+            float m = 0;
+            for (El e : els) {
+                switch (e.shape) {
+                    case "raise", "dots" -> m = Math.max(m, Math.abs(e.depth) + (Float.isNaN(e.z) ? 0 : e.z));
+                    case "curve" -> { if (e.depth > 0) m = Math.max(m, e.depth); }
+                    case "rod" -> m = Math.max(m, e.radius * 2 + (Float.isNaN(e.z) ? 0 : e.z));
+                    case "flat" -> m = Math.max(m, Float.isNaN(e.z) ? 0.0012f : e.z);
+                    default -> {}
+                }
+            }
+            return m;
+        }
+
         /** 오목 요소의 최대 깊이 (바탕을 그만큼 앞으로 내려야 할 때) */
         public float maxRecess() {
             float m = 0;

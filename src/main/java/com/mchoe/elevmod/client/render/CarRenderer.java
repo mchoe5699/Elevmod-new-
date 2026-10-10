@@ -473,6 +473,8 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         for (CarGeometry.Cop cop : CarGeometry.cops(c.car)) {
             float[] b = cop.box();
             PoseStack ps = c.ps;
+            ps.pushPose();
+            if (cop.wall() == 0) ps.translate(0, 0, -frontLift(c, false)); // 리턴 장식 위로 띄움
             RenderUtil.panel(ps, RenderUtil.solid(c.buf, faceTex(c.copSt)), b[0], b[1], b[2], b[3], b[4], b[5], c.il, WHITE);
             ps.pushPose();
             // 판넬 앞면을 원점, 카 안쪽을 +Z, 오른쪽을 +X 로 하는 좌표계로 변환
@@ -493,6 +495,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
                 ps.translate(0, 0, off + 0.0005f);
             }
             copFace(c, pw, b[1], b[4]);
+            ps.popPose();
             ps.popPose();
         }
     }
@@ -704,10 +707,20 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         ps.popPose();
     }
 
+    /** 커스텀 정면 벽(리턴/트랜섬)이 실내로 튀어나온 두께 – 그 위에 붙는 운전반·표시기를 그만큼 띄운다 */
+    private static float frontLift(Ctx c, boolean transom) {
+        if (c.cd == null || c.cd.frontWall == null) return 0;
+        CustomDesign.Surface s = transom && c.cd.transom != null ? c.cd.transom : c.cd.frontWall;
+        return s.maxRecess() + s.maxRaise() + 0.003f;
+    }
+
     /** 트랜섬(문 위) 위치표시기 */
     private void transomIndicator(Ctx c) {
         float[] b = CarGeometry.transom(c.car);
         if (b == null) return;
+        float lift = frontLift(c, true);
+        c.ps.pushPose();
+        c.ps.translate(0, 0, -lift);
         ListTag names = c.st.getList("n", Tag.TAG_STRING);
         int n = names.size();
         float z = c.d / 2 - T;
@@ -718,6 +731,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         c.ps.mulPose(Axis.YP.rotationDegrees(180));
         String cur = n == 0 ? "" : names.getString(Math.max(0, Math.min(c.st.getInt("cur"), n - 1)));
         indicator(c, -0.16f, b[1], 0.16f, b[4], 0, cur, c.st.getInt("dir"));
+        c.ps.popPose();
         c.ps.popPose();
     }
 

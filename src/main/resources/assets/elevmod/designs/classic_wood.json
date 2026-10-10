@@ -1,51 +1,225 @@
 {
-  "name": {"ko": "클래식 우드 (예시)", "en": "Classic wood (sample)"},
+  "name": {
+    "ko": "클래식 우드 (예시)",
+    "en": "Classic wood (sample)"
+  },
   "panelWidth": 0.62,
   "mirror": false,
   "floor": "floor_marble",
   "jamb": "jamb_gold",
-  "handrail": {"shape": "round", "y": 0.9, "r": 0.02, "color": "#C9A24A"},
+  "handrail": {
+    "shape": "round",
+    "y": 0.9,
+    "r": 0.02,
+    "color": "#C9A24A"
+  },
   "wall": {
     "tex": "panel_wood",
     "elements": [
-      {"shape": "raise", "xi": [0.06, 0.06], "ym": [0.06, 0.72], "depth": 0.012, "bevel": 0.022},
-      {"shape": "rod", "xi": [0.0, 0.0], "ym": [0.82, 0.82], "radius": 0.011, "axis": "x", "tex": "white", "color": "#C9A24A"},
-      {"shape": "raise", "xi": [0.06, 0.06], "yi": [0.95, 0.09], "depth": 0.012, "bevel": 0.022},
-      {"shape": "groove", "xi": [0.03, 0.03], "yi": [0.02, 0.035], "depth": 0.004, "tex": "panel_wood"}
+      {
+        "shape": "raise",
+        "xi": [
+          0.06,
+          0.06
+        ],
+        "ym": [
+          0.06,
+          0.72
+        ],
+        "depth": 0.02,
+        "bevel": 0.035
+      },
+      {
+        "shape": "rod",
+        "xi": [
+          0.0,
+          0.0
+        ],
+        "ym": [
+          0.82,
+          0.82
+        ],
+        "radius": 0.011,
+        "axis": "x",
+        "tex": "white",
+        "color": "#C9A24A"
+      },
+      {
+        "shape": "raise",
+        "xi": [
+          0.06,
+          0.06
+        ],
+        "yi": [
+          0.95,
+          0.09
+        ],
+        "depth": 0.02,
+        "bevel": 0.035
+      },
+      {
+        "shape": "groove",
+        "xi": [
+          0.03,
+          0.03
+        ],
+        "yi": [
+          0.02,
+          0.035
+        ],
+        "depth": 0.004,
+        "tex": "panel_wood"
+      }
     ]
   },
   "frontWall": {
     "tex": "panel_wood",
     "elements": [
-      {"shape": "curve", "axis": "x", "xi": [0.03, 0.03], "yi": [0.12, 0.12], "depth": 0.018, "tex": "panel_gold", "uv": "own"},
-      {"shape": "raise", "xi": [0.0, 0.0], "ym": [0.0, 0.12], "depth": 0.01, "bevel": 0.005, "tex": "panel_gold"}
+      {
+        "shape": "curve",
+        "axis": "x",
+        "xi": [
+          0.03,
+          0.03
+        ],
+        "yi": [
+          0.12,
+          0.12
+        ],
+        "depth": 0.018,
+        "tex": "panel_gold",
+        "uv": "own"
+      },
+      {
+        "shape": "raise",
+        "xi": [
+          0.0,
+          0.0
+        ],
+        "ym": [
+          0.0,
+          0.12
+        ],
+        "depth": 0.01,
+        "bevel": 0.005,
+        "tex": "panel_gold"
+      }
     ]
   },
   "transom": {
     "tex": "panel_wood",
     "elements": [
-      {"shape": "raise", "xi": [0.03, 0.03], "yi": [0.03, 0.03], "depth": 0.008, "bevel": 0.012}
+      {
+        "shape": "raise",
+        "xi": [
+          0.03,
+          0.03
+        ],
+        "yi": [
+          0.03,
+          0.03
+        ],
+        "depth": 0.008,
+        "bevel": 0.012
+      }
     ]
   },
   "door": {
     "tex": "door_wood",
     "elements": [
-      {"shape": "recess", "xi": [0.05, 0.05], "ym": [0.12, 0.92], "depth": 0.006, "bevel": 0.01},
-      {"shape": "recess", "xi": [0.05, 0.05], "yi": [1.05, 0.12], "depth": 0.006, "bevel": 0.01}
+      {
+        "shape": "recess",
+        "xi": [
+          0.05,
+          0.05
+        ],
+        "ym": [
+          0.12,
+          0.92
+        ],
+        "depth": 0.012,
+        "bevel": 0.016
+      },
+      {
+        "shape": "recess",
+        "xi": [
+          0.05,
+          0.05
+        ],
+        "yi": [
+          1.05,
+          0.12
+        ],
+        "depth": 0.012,
+        "bevel": 0.016
+      }
     ]
   },
   "ceiling": {
     "tex": "panel_wood",
     "elements": [
-      {"shape": "recess", "xi": [0.12, 0.12], "yi": [0.12, 0.12], "depth": 0.07, "bevel": 0.05, "tex": "panel_gold"},
-      {"shape": "flat", "xi": [0.2, 0.2], "yi": [0.2, 0.2], "z": -0.069, "tex": "ceiling_light", "uv": "own", "glow": true}
+      {
+        "shape": "recess",
+        "xi": [
+          0.12,
+          0.12
+        ],
+        "yi": [
+          0.12,
+          0.12
+        ],
+        "depth": 0.07,
+        "bevel": 0.05,
+        "tex": "panel_gold"
+      },
+      {
+        "shape": "flat",
+        "xi": [
+          0.2,
+          0.2
+        ],
+        "yi": [
+          0.2,
+          0.2
+        ],
+        "z": -0.069,
+        "tex": "ceiling_light",
+        "uv": "own",
+        "glow": true
+      }
     ]
   },
   "cop": {
     "tex": "cop_face_classic",
     "elements": [
-      {"shape": "raise", "xm": [0.0, 0.012], "y": [0.0, 1.0], "depth": 0.006, "bevel": 0.003, "tex": "panel_gold"},
-      {"shape": "raise", "xr": [0.012, 0.0], "y": [0.0, 1.0], "depth": 0.006, "bevel": 0.003, "tex": "panel_gold"}
+      {
+        "shape": "raise",
+        "xm": [
+          0.0,
+          0.012
+        ],
+        "y": [
+          0.0,
+          1.0
+        ],
+        "depth": 0.006,
+        "bevel": 0.003,
+        "tex": "panel_gold"
+      },
+      {
+        "shape": "raise",
+        "xr": [
+          0.012,
+          0.0
+        ],
+        "y": [
+          0.0,
+          1.0
+        ],
+        "depth": 0.006,
+        "bevel": 0.003,
+        "tex": "panel_gold"
+      }
     ]
   }
 }

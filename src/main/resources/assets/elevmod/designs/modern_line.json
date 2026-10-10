@@ -40,7 +40,8 @@
           2.05
         ],
         "depth": 0.01,
-        "bevel": 0.0
+        "bevel": 0.0,
+        "tex": "steel"
       },
       {
         "shape": "flat",
@@ -54,10 +55,11 @@
         ],
         "z": -0.009,
         "tex": "white",
-        "color": "#E8F4FF",
+        "color": "#FFFFFF",
         "glow": true
       }
-    ]
+    ],
+    "color": "#DCDCD6"
   },
   "frontWall": {
     "tex": "panel_stainless",
