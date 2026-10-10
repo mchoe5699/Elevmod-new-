@@ -92,6 +92,7 @@ public class LandingDoorBlock extends BaseEntityBlock {
     }
 
     public static void setOpen(Level level, BlockPos pos, boolean open) {
+        if (!level.isLoaded(pos)) return;
         BlockState s = level.getBlockState(pos);
         if (s.getBlock() instanceof LandingDoorBlock && s.getValue(OPEN) != open) level.setBlock(pos, s.setValue(OPEN, open), 3);
     }

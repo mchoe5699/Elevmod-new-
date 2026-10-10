@@ -327,6 +327,7 @@ public class ControllerBlockEntity extends BlockEntity {
             else if (powerOff) tickPower(lvl);
             else tickNormal(lvl);
             checkLimits(lvl);
+            if (levelErr != 0 && state == State.OPEN && timer < dwellTicks() - 20) levelErr = approach(levelErr, 0, 0.002); // 재착상
             travelled += Math.abs(s - before);
             updateCar(lvl);
         }
@@ -552,6 +553,11 @@ public class ControllerBlockEntity extends BlockEntity {
             cur = nearestIdx(s);
             return;
         }
+        if (doorPos > 0) { // 문부터 닫고 이동
+            doorPos = Math.max(0f, doorPos - doorSpeed());
+            if (doorPos == 0) landingSolid(lvl, cur, true);
+            return;
+        }
         // 재착상: 가장 가까운 층으로 저속 이동
         int t = nearestIdx(s);
         if (Math.abs(floorS[t] - s) < 0.03) { s = floorS[t]; cur = t; state = State.IDLE; return; }
@@ -652,8 +658,8 @@ public class ControllerBlockEntity extends BlockEntity {
         Vec3 p = carPos();
         for (Floor.Door d : floors.get(cur).doors) {
             Vec3 c = d.plane();
-            Vec3 a1 = c.add(L.scale(d.w / 2.0 - 0.1)).add(F.scale(d.rear ? -0.35 : 0.35));
-            Vec3 a2 = c.subtract(L.scale(d.w / 2.0 - 0.1)).subtract(F.scale(d.rear ? -0.35 : 0.35));
+            Vec3 a1 = c.add(L.scale(d.w / 2.0 - 0.1)).add(F.scale(d.rear ? -0.15 : 0.15));
+            Vec3 a2 = c.subtract(L.scale(d.w / 2.0 - 0.1)).subtract(F.scale(d.rear ? -0.15 : 0.15));
             AABB box = new AABB(a1.x, p.y + 0.05, a1.z, a2.x, p.y + d.h - 0.1, a2.z);
             if (!lvl.getEntities((Entity) null, box, e -> !(e instanceof ElevatorCarEntity) && !e.isSpectator()).isEmpty()) return true;
         }
@@ -1062,10 +1068,12 @@ public class ControllerBlockEntity extends BlockEntity {
             return;
         }
         int i = best.idxOfY(floorY);
+        if (beep && p != null) lvl.playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.BLOCKS, 0.4f, 2f);
+        boolean doorsOpenHere = best.cur == i && (best.state == State.OPEN || best.state == State.OPENING) && (best.dir == 0 || (best.dir > 0) == up);
+        if (doorsOpenHere) { best.timer = Math.max(best.timer, best.dwellTicks()); if (best.dir == 0) best.dir = up ? 1 : -1; return; }
+        if (best.cur == i && best.state == State.CLOSING && (best.dir == 0 || (best.dir > 0) == up)) { best.reopen(lvl); if (best.dir == 0) best.dir = up ? 1 : -1; return; }
         if (up) best.hallUp[i] = true; else best.hallDown[i] = true;
         best.displayHash++;
-        if (beep && p != null) lvl.playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.BLOCKS, 0.4f, 2f);
-        if (best.state == State.OPEN && best.cur == i) best.timer = Math.max(best.timer, best.dwellTicks());
     }
 
     public void hallCallDefault(ServerLevel lvl, int floorY) {
@@ -1543,7 +1551,15 @@ public class ControllerBlockEntity extends BlockEntity {
     public void edit(ServerPlayer p, String key, int delta, String text) {
         if (!(level instanceof ServerLevel lvl)) return;
         switch (key) {
-            case "usage" -> { usage = cycle(Spec.Usage.values(), usage, delta); applyUsageDefaults(); }
+            case "usage" -> {
+                Spec.Usage old = usage;
+                usage = cycle(Spec.Usage.values(), usage, delta);
+                applyUsageDefaults();
+                if (old == Spec.Usage.PATERNOSTER || usage == Spec.Usage.PATERNOSTER) {
+                    removeCars(lvl);
+                    s = 0; v = 0; cur = 0; target = -1; state = State.IDLE; doorPos = 0;
+                }
+            }
             case "drive" -> drive = cycle(Spec.Drive.values(), drive, delta);
             case "door" -> doorType = cycle(Spec.DoorType.values(), doorType, delta);
             case "theme" -> theme = cycle(Spec.Theme.values(), theme, delta);

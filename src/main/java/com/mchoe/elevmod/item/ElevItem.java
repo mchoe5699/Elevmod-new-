@@ -68,7 +68,7 @@ public class ElevItem extends Item {
                     return InteractionResult.SUCCESS;
                 }
                 if (be == null) return InteractionResult.PASS;
-                if (sp == null || !(level.getBlockEntity(sp) instanceof ControllerBlockEntity c)) {
+                if (sp == null || !level.isLoaded(sp) || !(level.getBlockEntity(sp) instanceof ControllerBlockEntity c)) {
                     p.displayClientMessage(Component.translatable("elevmod.msg.select_ctrl_first").withStyle(ChatFormatting.RED), true);
                     return InteractionResult.SUCCESS;
                 }

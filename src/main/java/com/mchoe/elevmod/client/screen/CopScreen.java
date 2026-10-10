@@ -25,7 +25,7 @@ public class CopScreen extends Screen {
     private final boolean accessible;
     private final List<Button> floorButtons = new ArrayList<>();
     private int heldAction, tick, lastFloorClick = -1, lastFloorTick;
-    private int panelX, panelY, panelW, panelH, floorCount;
+    private int panelX, panelY, panelW, panelH, floorCount, initMode;
 
     public CopScreen(ElevatorCarEntity car, boolean accessible) {
         super(Component.translatable(accessible ? "elevmod.screen.cop_acc" : "elevmod.screen.cop"));
@@ -47,6 +47,7 @@ public class CopScreen extends Screen {
         CompoundTag st = st();
         ListTag names = st.getList("n", Tag.TAG_STRING);
         floorCount = names.size();
+        initMode = st.getInt("mode");
         int cols = floorCount > 40 ? 8 : floorCount > 20 ? 6 : 4;
         int bw = 34, bh = 18, gap = 3;
         int rows = Math.max(1, (floorCount + cols - 1) / cols);
@@ -120,7 +121,7 @@ public class CopScreen extends Screen {
         if (car.isRemoved() || minecraft == null || minecraft.player == null || minecraft.player.distanceTo(car) > 8) { onClose(); return; }
         if (heldAction != 0 && tick % 2 == 0) send(heldAction, 0);
         CompoundTag st = st();
-        if (st.getList("n", Tag.TAG_STRING).size() != floorCount) { rebuildWidgets(); return; }
+        if (st.getList("n", Tag.TAG_STRING).size() != floorCount || st.getInt("mode") != initMode) { heldAction = 0; rebuildWidgets(); return; }
         byte[] calls = st.getByteArray("c");
         ListTag names = st.getList("n", Tag.TAG_STRING);
         for (int i = 0; i < floorButtons.size(); i++) {

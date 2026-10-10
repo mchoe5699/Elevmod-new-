@@ -142,7 +142,7 @@ public class ElevatorCarEntity extends Entity {
         if (level().isClientSide) return;
         if (++checkTimer >= 40) {
             checkTimer = 0;
-            if (!(level().getBlockEntity(controller()) instanceof ControllerBlockEntity c) || !c.carIds.contains(getUUID())) discard();
+            if (!level().isLoaded(controller()) || !(level().getBlockEntity(controller()) instanceof ControllerBlockEntity c) || !c.carIds.contains(getUUID())) discard();
         }
     }
 
