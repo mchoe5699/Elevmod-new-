@@ -202,6 +202,9 @@ public final class PhotoScenes {
         }
         SHOTS.add(new Shot("21_designs_left", -16.5, Y0, 36.2, 180, 8, ac, 0f, 0));
         SHOTS.add(new Shot("22_designs_right", -6.0, Y0, 36.2, 180, 8, ac, 0f, 0));
+        SHOTS.add(new Shot("23_seg_close", -14.0, Y0 + 0.75, 35.2, 180, 2, ac, 0f, 0));
+        SHOTS.add(new Shot("24_buttons_close", -19.0, Y0 - 0.25, 35.0, 180, 2, ac, 0f, 0));
+        SHOTS.add(new Shot("25_lantern_close", -0.5, Y0 - 0.25, 35.0, 180, 2, ac, 0f, 0));
 
         // ---- C: 승강장 장치 진열 벽
         for (int xx = -16; xx <= -2; xx++) for (int y = Y0; y <= Y0 + 3; y++) set(l, xx, y, 20, Blocks.SMOOTH_QUARTZ.defaultBlockState());
