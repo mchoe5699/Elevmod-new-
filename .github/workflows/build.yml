@@ -43,7 +43,12 @@ jobs:
           code=$?
           set -e
           grep -nE "required tests|tests? (were )?(passed|failed)|Exception|Caused by|elevmodgametests|elevatorgametests|Test .*(failed|passed)|GameTestBatch|Running test" gametest.log | grep -v DEBUG | head -70 | while IFS= read -r line; do echo "::warning::GT ${line}"; done
-          if [ "$code" = "0" ]; then echo "::notice::GAMETESTS_PASSED"; else echo "::error::GAMETESTS_FAILED exit=$code"; grep -iE "exception|error|assert" -A2 gametest.log | head -40 | while IFS= read -r line; do echo "::error::${line}"; done; fi
+          if [ "$code" = "0" ]; then echo "::notice::GAMETESTS_PASSED"; else
+            echo "::error::GAMETESTS_FAILED exit=$code"
+            # 실패 내용을 하나의 주석에 모아서 출력 (주석 개수 제한 회피)
+            msg=$(grep -E "failed|Assert|GameTestAssert|elevatorgametests" gametest.log | grep -vE "UnixException|server.properties|DEBUG" | head -40 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error::GT_FAILURES%0A${msg}"
+          fi
 
       - name: Dedicated server boot test
         continue-on-error: true
