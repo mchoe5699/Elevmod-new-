@@ -25,7 +25,7 @@ public class ControllerScreen extends Screen {
     private int tab = 0, renameIdx = 0;
     private EditBox nameBox;
     private final List<String> info = new ArrayList<>();
-    private static final String[] TABS = {"elevmod.tab.spec", "elevmod.tab.options", "elevmod.tab.floors", "elevmod.tab.operation", "elevmod.tab.info"};
+    private static final String[] TABS = {"elevmod.tab.spec", "elevmod.tab.options", "elevmod.tab.floors", "elevmod.tab.operation", "elevmod.tab.info", "elevmod.tab.size"};
 
     public ControllerScreen(BlockPos pos, CompoundTag data) {
         super(Component.translatable("elevmod.screen.controller"));
@@ -53,6 +53,13 @@ public class ControllerScreen extends Screen {
         ListTag ys = data.getList("ys", Tag.TAG_INT), names = data.getList("names", Tag.TAG_STRING);
         for (int i = 0; i < ys.size(); i++) if (ys.getInt(i) == y) return names.getString(i);
         return I18n.get("elevmod.none");
+    }
+
+    private Component size(CompoundTag t, String key, String actual) {
+        float v = t.getFloat(key);
+        if (v > 0) return Component.translatable("elevmod.size.m", String.format("%.1f", v)).withStyle(ChatFormatting.AQUA);
+        if (actual != null) return Component.translatable("elevmod.size.auto_val", String.format("%.2f", t.getFloat(actual)));
+        return Component.translatable("elevmod.size.auto");
     }
 
     private record Row(String key, String label, Function<CompoundTag, Component> value) {}
@@ -99,6 +106,17 @@ public class ControllerScreen extends Screen {
                 r.add(new Row("skip4", "elevmod.set.skip4", t -> onOff("skip4")));
                 r.add(new Row("skip13", "elevmod.set.skip13", t -> onOff("skip13")));
             }
+            case 5 -> {
+                r.add(new Row("carw", "elevmod.set.carw", t -> size(t, "setW", "cw")));
+                r.add(new Row("card", "elevmod.set.card", t -> size(t, "setD", "cd")));
+                r.add(new Row("carh", "elevmod.set.carh", t -> size(t, "setH", "ch")));
+                r.add(new Row("clearw", "elevmod.set.clearw", t -> size(t, "clearW", null)));
+                r.add(new Row("clearh", "elevmod.set.clearh", t -> size(t, "clearH", null)));
+                r.add(new Row("jamb", "elevmod.set.jamb", t -> Component.translatable(en(Spec.Jamb.values(), t.getInt("jamb")).key())));
+                r.add(new Row("ceiling", "elevmod.set.ceiling", t -> Component.translatable(en(Spec.Ceiling.values(), t.getInt("ceiling")).key())));
+                r.add(new Row("copside", "elevmod.set.copside", t -> Component.translatable(en(Spec.Side.values(), t.getInt("copSide")).key())));
+                r.add(new Row("hand", "elevmod.set.hand", t -> Component.translatable(en(Spec.Side.values(), Math.max(1, t.getInt("doorHand"))).key())));
+            }
             default -> {}
         }
         return r;
@@ -111,7 +129,7 @@ public class ControllerScreen extends Screen {
         for (int i = 0; i < TABS.length; i++) {
             final int ti = i;
             Button b = Button.builder(Component.translatable(TABS[i]).withStyle(i == tab ? ChatFormatting.YELLOW : ChatFormatting.WHITE), x -> { tab = ti; rebuildWidgets(); })
-                    .bounds(left + i * 68, top, 66, 18).build();
+                    .bounds(left + i * 57, top, 55, 18).build();
             addRenderableWidget(b);
         }
         int y0 = top + 26;
@@ -144,6 +162,10 @@ public class ControllerScreen extends Screen {
                         .bounds(left + 252, y, 70, 20).build());
             }
         }
+        if (tab == 5) {
+            addRenderableWidget(Button.builder(Component.translatable("elevmod.set.size_auto"), b -> edit("size_auto", 0, ""))
+                    .bounds(left, y0 + 8 * 22 + 6, 110, 20).build());
+        }
         if (tab == 3) {
             String[][] ops = {
                     {"mode_normal", "elevmod.op.normal"}, {"mode_parking", "elevmod.op.parking"}, {"mode_sabbath", "elevmod.op.sabbath"},
@@ -175,6 +197,11 @@ public class ControllerScreen extends Screen {
         String state = I18n.get(data.getString("modeK")) + " / " + data.getString("state") + (data.getBoolean("powerOff") ? " / " + I18n.get("elevmod.status.power") : "")
                 + (!"elevmod.fault.none".equals(data.getString("faultK")) ? " / " + I18n.get(data.getString("faultK")) : "");
         if (tab == 3) g.drawString(font, I18n.get("elevmod.info.state", state), left, y0 + 6, 0xFFFFD040, false);
+        if (tab == 5) {
+            g.drawString(font, I18n.get("elevmod.info.dims", String.format("%.2f", data.getFloat("cw")), String.format("%.2f", data.getFloat("cd")), String.format("%.2f", data.getFloat("ch"))),
+                    left + 120, y0 + 8 * 22 + 12, 0xFFAAAAAA, false);
+            g.drawString(font, I18n.get("elevmod.info.size_hint"), left, y0 + 8 * 22 + 32, 0xFF888888, false);
+        }
         if (tab == 0) {
             g.drawString(font, I18n.get("elevmod.info.dims", String.format("%.2f", data.getFloat("cw")), String.format("%.2f", data.getFloat("cd")), String.format("%.2f", data.getFloat("ch"))),
                     left, y0 + 6 * 22 + 8, 0xFFAAAAAA, false);

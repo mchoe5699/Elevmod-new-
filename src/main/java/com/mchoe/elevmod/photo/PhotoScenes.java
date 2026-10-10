@@ -95,36 +95,64 @@ public final class PhotoScenes {
         device(l, p, a, ModRegistry.HALL_LANTERN.get(), -1, Y0 + 2, 1);
         double cx = 0.5, cd = a.cd;
         BlockPos ac = a.getBlockPos();
-        SHOTS.add(new Shot("01_hall_closed", cx, Y0, 4.5, 180, 6, ac, 0f, 0));
-        SHOTS.add(new Shot("02_hall_half", cx, Y0, 4.5, 180, 6, ac, 0.5f, 0));
+        SHOTS.add(new Shot("01_hall_closed", cx, Y0, 3.6, 180, 6, ac, 0f, 0));
+        SHOTS.add(new Shot("02_hall_half", cx, Y0, 3.6, 180, 6, ac, 0.5f, 0));
         SHOTS.add(new Shot("03_hall_open", cx, Y0, 3.2, 180, 10, ac, 1f, 0));
         SHOTS.add(new Shot("04_car_front_closed", cx, Y0, -cd + 0.32, 0, 12, ac, 0f, 0));
         SHOTS.add(new Shot("05_car_front_open", cx, Y0, -cd + 0.32, 0, 12, ac, 1f, 0));
         SHOTS.add(new Shot("06_car_back", cx, Y0, -0.35, 180, 8, ac, 0f, 0));
         SHOTS.add(new Shot("07_car_side_left", cx, Y0, -cd / 2, 90, 10, ac, 0f, 0));
         SHOTS.add(new Shot("08_car_ceiling", cx, Y0, -cd / 2, 0, -70, ac, 0f, 0));
-        float copX = (float) (0.5 + a.frontOff - a.frontW / 2 - 0.19);
-        SHOTS.add(new Shot("09_cop_close", copX, Y0 - 0.1, -0.78, 0, 18, ac, 0f, 0));
+        float copX = (float) (0.5 + (-a.cw / 2 + a.frontOff - a.frontW / 2) / 2);
+        SHOTS.add(new Shot("09_cop_close", copX, Y0 - 0.15, -0.72, 0, 22, ac, 0f, 0));
 
         // ---- B: 도어 방식별 (반쯤 열림)
         Object[][] types = {
-                {Spec.DoorType.CO, 1, Spec.Usage.PASSENGER, 4}, {Spec.DoorType.CO4, 2, Spec.Usage.PASSENGER_FREIGHT, 9},
-                {Spec.DoorType.S1, 1, Spec.Usage.PASSENGER, 4}, {Spec.DoorType.S2, 1, Spec.Usage.HOSPITAL, 8},
-                {Spec.DoorType.S3, 2, Spec.Usage.FREIGHT, 10}, {Spec.DoorType.UP, 2, Spec.Usage.FREIGHT, 10},
-                {Spec.DoorType.SWING, 1, Spec.Usage.HOME, 1}, {Spec.DoorType.GATE, 2, Spec.Usage.CONSTRUCTION, 9}};
+                {Spec.DoorType.CO, 1, Spec.Usage.PASSENGER, 4, Spec.Jamb.NARROW, false},
+                {Spec.DoorType.CO4, 2, Spec.Usage.PASSENGER_FREIGHT, 9, Spec.Jamb.WIDE, false},
+                {Spec.DoorType.CO6, 3, Spec.Usage.FREIGHT, 12, Spec.Jamb.NARROW, false},
+                {Spec.DoorType.S1, 1, Spec.Usage.PASSENGER, 4, Spec.Jamb.NARROW, false},
+                {Spec.DoorType.S2, 1, Spec.Usage.HOSPITAL, 8, Spec.Jamb.NARROW, false},
+                {Spec.DoorType.S2, 1, Spec.Usage.HOSPITAL, 8, Spec.Jamb.NARROW, true},
+                {Spec.DoorType.S3, 2, Spec.Usage.FREIGHT, 10, Spec.Jamb.WIDE, false},
+                {Spec.DoorType.S4, 2, Spec.Usage.FREIGHT, 10, Spec.Jamb.NARROW, false},
+                {Spec.DoorType.UP, 2, Spec.Usage.FREIGHT, 10, Spec.Jamb.NONE, false},
+                {Spec.DoorType.BIPART, 2, Spec.Usage.FREIGHT, 10, Spec.Jamb.NONE, false},
+                {Spec.DoorType.SWING, 1, Spec.Usage.HOME, 1, Spec.Jamb.NARROW, false},
+                {Spec.DoorType.GATE, 2, Spec.Usage.CONSTRUCTION, 9, Spec.Jamb.NONE, false}};
         int x = 14;
         for (Object[] t : types) {
             Spec.DoorType dt = (Spec.DoorType) t[0];
             int dw = (Integer) t[1];
             Spec.Usage u = (Spec.Usage) t[2];
             int cap = (Integer) t[3];
-            ControllerBlockEntity c = elevator(l, p, x, 0, 2, 4, dw, 2, false, cc -> { cc.usage = u; cc.doorType = dt; cc.capIdx = cap; });
-            String n = dt.name().toLowerCase();
+            Spec.Jamb jb = (Spec.Jamb) t[4];
+            boolean rh = (Boolean) t[5];
+            ControllerBlockEntity c = elevator(l, p, x, 0, 2, 4, dw, 2, false, cc -> {
+                cc.usage = u; cc.doorType = dt; cc.capIdx = cap; cc.jamb = jb; cc.doorHand = rh ? Spec.Side.RIGHT : Spec.Side.LEFT;
+                if (u == Spec.Usage.FREIGHT || u == Spec.Usage.CONSTRUCTION) cc.theme = Spec.Theme.CHECKER;
+            });
+            String n = dt.name().toLowerCase() + (rh ? "_right" : "");
             double mid = x + dw / 2.0;
-            SHOTS.add(new Shot("10_door_" + n + "_hall", mid, Y0, 4.0, 180, 8, c.getBlockPos(), 0.45f, 0));
+            SHOTS.add(new Shot("10_door_" + n + "_hall", mid, Y0, 3.2 + dw * 0.5, 180, 8, c.getBlockPos(), 0.45f, 0));
             SHOTS.add(new Shot("11_door_" + n + "_car", mid, Y0, -c.cd + 0.3, 0, 10, c.getBlockPos(), 0.45f, 0));
-            x += dw + 8;
+            x += dw + 9;
         }
+
+        // ---- E: 우드 + 다운라이트 승객용 (참고사진 비교용), 크기 직접 설정
+        ControllerBlockEntity e = elevator(l, p, x, 0, 2, 4, 1, 2, false, cc -> {
+            cc.usage = Spec.Usage.PASSENGER; cc.theme = Spec.Theme.WOOD; cc.ceiling = Spec.Ceiling.DOWNLIGHT; cc.capIdx = 6;
+            cc.setW = 1.6f; cc.setD = 1.5f; cc.setH = 2.5f;
+        });
+        double ex = x + 0.5;
+        SHOTS.add(new Shot("40_wood_front", ex, Y0, -e.cd + 0.3, 0, 8, e.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("41_wood_back", ex, Y0, -0.35, 180, 6, e.getBlockPos(), 0f, 0));
+        x += 10;
+        ControllerBlockEntity gd = elevator(l, p, x, 0, 2, 4, 1, 2, false, cc -> {
+            cc.usage = Spec.Usage.PASSENGER; cc.theme = Spec.Theme.GOLD; cc.ceiling = Spec.Ceiling.GRID; cc.capIdx = 7; cc.jamb = Spec.Jamb.WIDE;
+        });
+        SHOTS.add(new Shot("42_gold_front", x + 0.5, Y0, -gd.cd + 0.3, 0, 8, gd.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("43_gold_hall", x + 0.5, Y0, 3.6, 180, 6, gd.getBlockPos(), 0f, 0));
 
         // ---- C: 승강장 장치 진열 벽
         for (int xx = -16; xx <= -2; xx++) for (int y = Y0; y <= Y0 + 3; y++) set(l, xx, y, 20, Blocks.SMOOTH_QUARTZ.defaultBlockState());

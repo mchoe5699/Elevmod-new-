@@ -32,16 +32,16 @@ import org.jetbrains.annotations.Nullable;
 /** 승강장 / 벽부착 장치 */
 public class DeviceBlock extends BaseEntityBlock {
     public enum Kind {
-        HALL_BUTTON(5, 3, 11, 13, 1.5),
-        HALL_PANEL(4, 1, 12, 15, 1.5),
-        IND_SEGMENT(2, 4, 14, 12, 1.5),
-        IND_DOT(2, 4, 14, 12, 1.5),
-        IND_LCD(1, 3, 15, 13, 1.5),
-        IND_LAMP(0, 6, 16, 10, 1.5),
-        LANTERN(3, 5, 13, 11, 1.5),
-        FIRE_SWITCH(5, 4, 11, 12, 2),
-        DESTINATION(3, 1, 13, 15, 2),
-        CALL_RECEIVER(5, 5, 11, 11, 1);
+        HALL_BUTTON(6.5, 1, 9.5, 7, 0.6),
+        HALL_PANEL(5.5, 0, 10.5, 10, 0.6),
+        IND_SEGMENT(4, 2, 12, 5, 1),
+        IND_DOT(3.5, 2, 12.5, 5.5, 1),
+        IND_LCD(4.5, 1, 11.5, 6.5, 1),
+        IND_LAMP(0, 3, 16, 5, 1),
+        LANTERN(5, 2, 11, 4.5, 1.2),
+        FIRE_SWITCH(5.5, 1, 10.5, 7, 1.5),
+        DESTINATION(4.5, 0, 11.5, 9, 1.2),
+        CALL_RECEIVER(6.5, 6, 9.5, 9, 0.5);
 
         public final double x1, y1, x2, y2, depth;
         Kind(double x1, double y1, double x2, double y2, double depth) { this.x1 = x1; this.y1 = y1; this.x2 = x2; this.y2 = y2; this.depth = depth; }
@@ -102,7 +102,7 @@ public class DeviceBlock extends BaseEntityBlock {
         switch (kind) {
             case HALL_BUTTON, HALL_PANEL -> {
                 double ly = hit.getLocation().y - pos.getY();
-                double split = kind == Kind.HALL_PANEL ? 0.32 : 0.5;
+                double split = kind == Kind.HALL_PANEL ? 0.175 : 0.245;
                 boolean up = ly >= split;
                 if (!d.hasUp) up = false;
                 if (!d.hasDown) up = true;

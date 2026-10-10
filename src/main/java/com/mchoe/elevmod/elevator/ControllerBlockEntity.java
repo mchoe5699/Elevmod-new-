@@ -69,6 +69,11 @@ public class ControllerBlockEntity extends BlockEntity {
     public boolean ard = true, ropeBrake = true, preOpen = false, window = false, airClean = true, aircon = false;
     public boolean stopSwitch = false, inclined = false, accessibleCop = true, destination = false;
     public int lobbyY = Integer.MIN_VALUE, homeY = Integer.MIN_VALUE, fireY = Integer.MIN_VALUE;
+    /** 크기 설정 (0 = 자동). 카 내부 폭/깊이/높이, 출입구 유효 폭/높이 (m) */
+    public float setW, setD, setH, clearW, clearH;
+    public Spec.Jamb jamb = Spec.Jamb.NARROW;
+    public Spec.Ceiling ceiling = Spec.Ceiling.PANEL;
+    public Spec.Side copSide = Spec.Side.AUTO, doorHand = Spec.Side.LEFT;
     public String serial = "";
 
     // ------------------------------------------------------------ 구조
@@ -105,6 +110,10 @@ public class ControllerBlockEntity extends BlockEntity {
     // ------------------------------------------------------------ 계산값
     public float cw = 1.4f, cd = 1.35f, ch = 2.4f;
     public float frontW, frontH, frontOff, rearW, rearH, rearOff;
+    /** 실제 출입구(유효) 폭/높이 – 문 칸 수보다 작을 수 있음 */
+    public float effW(int cells) { return clearW > 0 ? Math.min(clearW, cells) : Math.max(0.6f, cells - 0.1f); }
+    public float effH(int cells) { return clearH > 0 ? Math.min(clearH, cells) : cells - 0.05f; }
+    public boolean rightHand() { return doorHand == Spec.Side.RIGHT; }
     public double[] floorS = new double[0];
     private double paterLoop;
 
@@ -179,10 +188,14 @@ public class ControllerBlockEntity extends BlockEntity {
             if (d.rear && refRear == null) refRear = d;
         }
         float maxDoorW = 0, maxDoorH = 0;
-        for (Floor f : floors) for (Floor.Door d : f.doors) { maxDoorW = Math.max(maxDoorW, d.w); maxDoorH = Math.max(maxDoorH, d.h); }
+        for (Floor f : floors) for (Floor.Door d : f.doors) { maxDoorW = Math.max(maxDoorW, effW(d.w)); maxDoorH = Math.max(maxDoorH, effH(d.h)); }
+        if (doorType.sideOpening() && usage != Spec.Usage.DUMBWAITER) cw = Math.max(cw, maxDoorW * (1 + (doorType.panels - 1f) / doorType.panels) * 0.8f + 0.2f);
+        if (setW > 0) cw = setW;
+        if (setD > 0) cd = setD;
+        if (setH > 0) ch = setH;
         if (usage != Spec.Usage.DUMBWAITER) {
-            cw = Math.max(cw, maxDoorW + 0.3f);
-            ch = Math.max(ch, maxDoorH + 0.3f);
+            cw = Math.max(cw, maxDoorW + 0.2f);
+            ch = Math.max(ch, maxDoorH + 0.25f);
         } else {
             cw = Math.max(cw, maxDoorW);
             ch = Math.max(ch, maxDoorH);
@@ -196,6 +209,14 @@ public class ControllerBlockEntity extends BlockEntity {
         Vec3 base = null;
         if (refFront != null) base = refFront.plane().subtract(F.scale(cd / 2.0));
         else if (refRear != null) base = refRear.plane().add(F.scale(cd / 2.0));
+        // 편개(측면개폐) 문은 문짝 수납부 쪽으로 카를 치우쳐 반대편(닫히는 쪽) 벽에 문을 붙인다
+        Floor.Door ref = refFront != null ? refFront : refRear;
+        if (base != null && ref != null && doorType.sideOpening()) {
+            float shift = Math.max(0f, (cw - effW(ref.w)) / 2f - 0.12f);
+            int pocket = rightHand() ? 1 : -1;
+            if (ref.rear) pocket = -pocket;
+            base = base.add(L.scale(pocket * shift));
+        }
         for (Floor f : floors) {
             Vec3 a = base == null ? Vec3.atBottomCenterOf(worldPosition) : new Vec3(base.x, f.y, base.z);
             if (inclined && !f.doors.isEmpty()) {
@@ -205,8 +226,8 @@ public class ControllerBlockEntity extends BlockEntity {
             f.ax = a.x; f.ay = f.y; f.az = a.z;
             for (Floor.Door d : f.doors) d.off = (float) d.plane().subtract(a).dot(L);
         }
-        if (refFront != null) { frontW = refFront.w; frontH = refFront.h; frontOff = refFront.off; }
-        if (refRear != null) { rearW = refRear.w; rearH = refRear.h; rearOff = refRear.off; }
+        if (refFront != null) { frontW = effW(refFront.w); frontH = effH(refFront.h); frontOff = refFront.off; }
+        if (refRear != null) { rearW = effW(refRear.w); rearH = effH(refRear.h); rearOff = refRear.off; }
         // 경로
         floorS = new double[n];
         for (int i = 1; i < n; i++) floorS[i] = floorS[i - 1] + floors.get(i).anchor().distanceTo(floors.get(i - 1).anchor());
@@ -958,6 +979,9 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putBoolean("open", state == State.OPEN || state == State.OPENING);
         t.putBoolean("glass", usage == Spec.Usage.OBSERVATION);
         t.putInt("cab", cabin);
+        t.putInt("ceil", ceiling.ordinal());
+        t.putBoolean("rh", rightHand());
+        t.putInt("cops", copSide.ordinal());
         return t;
     }
 
@@ -1451,7 +1475,8 @@ public class ControllerBlockEntity extends BlockEntity {
         for (BlockPos c : cells) {
             if (lvl.getBlockEntity(c) instanceof LandingDoorBlockEntity be) {
                 int col = c.getX() * a.getStepX() + c.getZ() * a.getStepZ();
-                be.link(worldPosition, c.equals(d.master), col - minCol, c.getY() - minY, d.w, d.h, doorType, theme, window);
+                be.link(worldPosition, c.equals(d.master), col - minCol, c.getY() - minY, d.w, d.h);
+                be.style(doorType, theme, window, jamb, rightHand(), effW(d.w), effH(d.h));
             }
         }
         if (lobbyY == Integer.MIN_VALUE) lobbyY = minY;
@@ -1544,7 +1569,7 @@ public class ControllerBlockEntity extends BlockEntity {
     /** 설정 변경 후 문 모양 갱신 */
     private void refreshDoors(ServerLevel lvl) {
         for (Floor f : floors) for (Floor.Door d : f.doors) for (BlockPos c : d.cells) {
-            if (lvl.getBlockEntity(c) instanceof LandingDoorBlockEntity be) be.style(doorType, theme, window);
+            if (lvl.getBlockEntity(c) instanceof LandingDoorBlockEntity be) be.style(doorType, theme, window, jamb, rightHand(), effW(d.w), effH(d.h));
         }
     }
 
@@ -1569,6 +1594,16 @@ public class ControllerBlockEntity extends BlockEntity {
             case "cap" -> capIdx = Math.floorMod(capIdx + delta, Spec.CAPACITY_KG.length);
             case "speed" -> speedIdx = Math.floorMod(speedIdx + delta, Spec.SPEED_MPM.length);
             case "dwell" -> dwellSec = Math.max(1, Math.min(30, dwellSec + delta));
+            case "carw" -> setW = size(setW, delta, 0.8f, 6.0f, cw);
+            case "card" -> setD = size(setD, delta, 0.8f, 8.0f, cd);
+            case "carh" -> setH = size(setH, delta, 1.0f, 4.0f, ch);
+            case "clearw" -> clearW = size(clearW, delta, 0.6f, 4.0f, frontW > 0 ? frontW : 0.9f);
+            case "clearh" -> clearH = size(clearH, delta, 1.0f, 4.0f, frontH > 0 ? frontH : 1.95f);
+            case "size_auto" -> { setW = 0; setD = 0; setH = 0; clearW = 0; clearH = 0; }
+            case "jamb" -> jamb = cycle(Spec.Jamb.values(), jamb, delta);
+            case "ceiling" -> ceiling = cycle(Spec.Ceiling.values(), ceiling, delta);
+            case "copside" -> copSide = cycle(Spec.Side.values(), copSide, delta);
+            case "hand" -> doorHand = doorHand == Spec.Side.RIGHT ? Spec.Side.LEFT : Spec.Side.RIGHT;
             case "return" -> returnSec = Math.floorMod(returnSec + delta * 15, 315);
             case "beep" -> beep = !beep;
             case "fourf" -> fourAsF = !fourAsF;
@@ -1667,6 +1702,14 @@ public class ControllerBlockEntity extends BlockEntity {
         }
     }
 
+    /** 0(자동) → 현재값에서 시작, 0.1m 단위. 범위를 벗어나면 자동(0)으로 */
+    private static float size(float v, int delta, float min, float max, float current) {
+        float base = v > 0 ? v : Math.round(current * 10) / 10f;
+        float n = Math.round((base + 0.1f * delta) * 10) / 10f;
+        if (n < min || n > max) return 0f;
+        return n;
+    }
+
     private int cycleFloorY(int curY, int delta, boolean allowNone) {
         List<Integer> ys = new ArrayList<>();
         if (allowNone) ys.add(Integer.MIN_VALUE);
@@ -1742,6 +1785,10 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putInt("fire", fireY);
         t.putString("serial", serial);
         t.putLong("lastInspect", lastInspect);
+        t.putFloat("setW", setW); t.putFloat("setD", setD); t.putFloat("setH", setH);
+        t.putFloat("clearW", clearW); t.putFloat("clearH", clearH);
+        t.putInt("jamb", jamb.ordinal()); t.putInt("ceiling", ceiling.ordinal());
+        t.putInt("copSide", copSide.ordinal()); t.putInt("doorHand", doorHand.ordinal());
     }
 
     private void loadSettings(CompoundTag t) {
@@ -1774,6 +1821,12 @@ public class ControllerBlockEntity extends BlockEntity {
         fireY = t.getInt("fire");
         serial = t.getString("serial");
         lastInspect = t.getLong("lastInspect");
+        setW = t.getFloat("setW"); setD = t.getFloat("setD"); setH = t.getFloat("setH");
+        clearW = t.getFloat("clearW"); clearH = t.getFloat("clearH");
+        jamb = en(Spec.Jamb.values(), t.getInt("jamb"));
+        ceiling = en(Spec.Ceiling.values(), t.getInt("ceiling"));
+        copSide = en(Spec.Side.values(), t.getInt("copSide"));
+        doorHand = t.contains("doorHand") ? en(Spec.Side.values(), t.getInt("doorHand")) : Spec.Side.LEFT;
     }
 
     private static <E extends Enum<E>> E en(E[] vals, int i) { return vals[Math.max(0, Math.min(i, vals.length - 1))]; }

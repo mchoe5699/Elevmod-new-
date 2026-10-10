@@ -1,19 +1,19 @@
 {
   "parent": "block/block",
   "textures": {
-    "particle": "elevmod:block/indicator_bezel",
-    "t": "elevmod:block/indicator_bezel"
+    "particle": "elevmod:block/plate_black",
+    "t": "elevmod:block/plate_black"
   },
   "elements": [
     {
       "from": [
-        2,
         4,
-        14.5
+        2,
+        15
       ],
       "to": [
-        14,
         12,
+        5,
         16
       ],
       "faces": {

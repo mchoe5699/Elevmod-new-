@@ -26,7 +26,9 @@ public class LandingDoorBlockEntity extends BlockEntity {
     public boolean master = true;
     public int col, row, w = 1, h = 1;
     public int doorType = 0, theme = 0;
-    public boolean window;
+    public boolean window, rightHand;
+    public int jamb = 0;
+    public float clearW = 0.9f, clearH = 0.95f;
     public float target, speed = 0.025f;
     public int manualTicks;
     // 클라이언트 애니메이션
@@ -47,20 +49,22 @@ public class LandingDoorBlockEntity extends BlockEntity {
         return worldPosition.relative(a, -col).below(row);
     }
 
-    public void link(BlockPos c, boolean isMaster, int col, int row, int w, int h, Spec.DoorType t, Spec.Theme th, boolean win) {
+    public void link(BlockPos c, boolean isMaster, int col, int row, int w, int h) {
         this.ctrl = c; this.master = isMaster; this.col = col; this.row = row; this.w = w; this.h = h;
-        this.doorType = t.ordinal(); this.theme = th.ordinal(); this.window = win;
         sync();
     }
 
-    public void style(Spec.DoorType t, Spec.Theme th, boolean win) {
-        if (doorType == t.ordinal() && theme == th.ordinal() && window == win) return;
-        doorType = t.ordinal(); theme = th.ordinal(); window = win;
+    public void style(Spec.DoorType t, Spec.Theme th, boolean win, Spec.Jamb jb, boolean right, float cw, float chh) {
+        if (doorType == t.ordinal() && theme == th.ordinal() && window == win && jamb == jb.ordinal() && rightHand == right
+                && clearW == cw && clearH == chh) return;
+        doorType = t.ordinal(); theme = th.ordinal(); window = win; jamb = jb.ordinal(); rightHand = right; clearW = cw; clearH = chh;
         sync();
     }
+
+    public Spec.Jamb jambE() { Spec.Jamb[] v = Spec.Jamb.values(); return v[Math.max(0, Math.min(jamb, v.length - 1))]; }
 
     public void unlink() {
-        ctrl = null; master = true; col = 0; row = 0; w = 1; h = 1; target = 0;
+        ctrl = null; master = true; col = 0; row = 0; w = 1; h = 1; target = 0; clearW = 0.9f; clearH = 0.95f;
         sync();
     }
 
@@ -131,6 +135,7 @@ public class LandingDoorBlockEntity extends BlockEntity {
         t.putBoolean("master", master);
         t.putInt("col", col); t.putInt("row", row); t.putInt("w", w); t.putInt("h", h);
         t.putInt("type", doorType); t.putInt("theme", theme); t.putBoolean("win", window);
+        t.putInt("jamb", jamb); t.putBoolean("rh", rightHand); t.putFloat("cw", clearW); t.putFloat("ch", clearH);
         t.putFloat("target", target); t.putFloat("speed", speed);
     }
 
@@ -142,6 +147,9 @@ public class LandingDoorBlockEntity extends BlockEntity {
         col = t.getInt("col"); row = t.getInt("row");
         w = Math.max(1, t.getInt("w")); h = Math.max(1, t.getInt("h"));
         doorType = t.getInt("type"); theme = t.getInt("theme"); window = t.getBoolean("win");
+        jamb = t.getInt("jamb"); rightHand = t.getBoolean("rh");
+        clearW = t.contains("cw") ? t.getFloat("cw") : Math.max(0.6f, w - 0.1f);
+        clearH = t.contains("ch") ? t.getFloat("ch") : h - 0.05f;
         target = t.getFloat("target");
         speed = t.contains("speed") ? t.getFloat("speed") : 0.025f;
     }

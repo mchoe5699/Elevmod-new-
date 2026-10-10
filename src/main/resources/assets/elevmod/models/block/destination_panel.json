@@ -1,19 +1,19 @@
 {
   "parent": "block/block",
   "textures": {
-    "particle": "elevmod:block/destination_panel",
-    "t": "elevmod:block/destination_panel"
+    "particle": "elevmod:block/plate_stainless",
+    "t": "elevmod:block/plate_stainless"
   },
   "elements": [
     {
       "from": [
-        3,
-        1,
-        14
+        4.5,
+        0,
+        14.8
       ],
       "to": [
-        13,
-        15,
+        11.5,
+        9,
         16
       ],
       "faces": {

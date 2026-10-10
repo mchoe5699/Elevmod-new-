@@ -1,19 +1,19 @@
 {
   "parent": "block/block",
   "textures": {
-    "particle": "elevmod:block/button_panel",
-    "t": "elevmod:block/button_panel"
+    "particle": "elevmod:block/plate_stainless",
+    "t": "elevmod:block/plate_stainless"
   },
   "elements": [
     {
       "from": [
-        4,
-        1,
-        14.5
+        5.5,
+        0,
+        15.4
       ],
       "to": [
-        12,
-        15,
+        10.5,
+        10,
         16
       ],
       "faces": {

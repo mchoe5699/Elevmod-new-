@@ -10,6 +10,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -21,8 +22,14 @@ import java.util.List;
 
 import static com.mchoe.elevmod.client.render.CarGeometry.T;
 
+/**
+ * 엘리베이터 카 렌더러 – 실제 카 구성:
+ * 바닥(석재/체커) · 카 실(문턱) · 측면/후면 판넬(+킥플레이트, 상부 프리즈) · 프런트 리턴 + 트랜섬 ·
+ * 리턴에 매립된 운전반(COP) · 카 도어(망원식 레이어, 앞날 세이프티 빔) · 핸드레일 · 거울 · 매립형 천장 조명 ·
+ * 카 외부: 카 프레임(크로스헤드/스타일/플랭크), 도어 오퍼레이터, 토가드, 가이드레일, 균형추, 로프, 유압잭
+ */
 public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
-    private static final int STEEL = 0xFF9AA0A6, DARK = 0xFF2A2C30, WHITE = 0xFFFFFFFF, AMBER = 0xFFFFB020, BLACK = 0xFF0A0A0A;
+    private static final int WHITE = 0xFFFFFFFF, STEEL = 0xFFB4BAC0, DARK = 0xFF26282C, BLACK = 0xFF060608;
 
     public CarRenderer(EntityRendererProvider.Context ctx) {
         super(ctx);
@@ -30,278 +37,526 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
     }
 
     @Override
-    public ResourceLocation getTextureLocation(ElevatorCarEntity e) { return RenderUtil.tex("wall_stainless"); }
+    public ResourceLocation getTextureLocation(ElevatorCarEntity e) { return RenderUtil.tex("panel_stainless"); }
 
     @Override
     public boolean shouldRender(ElevatorCarEntity e, Frustum f, double x, double y, double z) { return e.cCur != null; }
 
+    private static <E extends Enum<E>> E en(E[] v, int i) { return v[Math.max(0, Math.min(i, v.length - 1))]; }
+
     @Override
     public void render(ElevatorCarEntity car, float yaw, float pt, PoseStack ps, MultiBufferSource buf, int light) {
         if (car.cCur == null || car.cPrev == null) return;
-        Vec3 rp = car.cPrev.lerp(car.cCur, pt);
-        double vx = Mth.lerp(pt, car.xOld, car.getX()), vy = Mth.lerp(pt, car.yOld, car.getY()), vz = Mth.lerp(pt, car.zOld, car.getZ());
         CompoundTag st = car.state();
         if (st.isEmpty()) return;
+        Vec3 rp = car.cPrev.lerp(car.cCur, pt);
+        double vx = Mth.lerp(pt, car.xOld, car.getX()), vy = Mth.lerp(pt, car.yOld, car.getY()), vz = Mth.lerp(pt, car.zOld, car.getZ());
         ps.pushPose();
         ps.translate(rp.x - vx, rp.y - vy, rp.z - vz);
         ps.mulPose(Axis.YP.rotationDegrees(-car.facing().toYRot()));
 
-        float w = car.carW(), h = car.carH(), d = car.carD();
-        Spec.Usage usage = en(Spec.Usage.values(), st.getInt("usage"));
-        Spec.Drive drive = en(Spec.Drive.values(), st.getInt("drive"));
-        Spec.DoorType dt = en(Spec.DoorType.values(), st.getInt("door"));
-        Spec.Theme theme = en(Spec.Theme.values(), st.getInt("theme"));
-        boolean lights = st.getBoolean("light"), emg = st.getBoolean("emg");
-        int il = lights ? RenderUtil.FULL : emg ? LightTexture.pack(5, 0) : light;
-        float door = car.doorPrev + (car.doorCur - car.doorPrev) * pt;
-        float carAbs = (float) rp.y;
+        Ctx c = new Ctx();
+        c.ps = ps; c.buf = buf; c.st = st; c.light = light;
+        c.w = car.carW(); c.h = car.carH(); c.d = car.carD();
+        c.usage = en(Spec.Usage.values(), st.getInt("usage"));
+        c.drive = en(Spec.Drive.values(), st.getInt("drive"));
+        c.dt = en(Spec.DoorType.values(), st.getInt("door"));
+        c.theme = en(Spec.Theme.values(), st.getInt("theme"));
+        c.ceiling = en(Spec.Ceiling.values(), st.getInt("ceil"));
+        c.lights = st.getBoolean("light");
+        c.emg = st.getBoolean("emg");
+        c.il = c.lights ? RenderUtil.FULL : c.emg ? LightTexture.pack(5, 0) : light;
+        c.door = car.doorPrev + (car.doorCur - car.doorPrev) * pt;
+        c.carAbs = (float) rp.y;
+        c.fw = st.getFloat("fw"); c.fh = st.getFloat("fh"); c.fo = st.getFloat("fo");
+        c.rw = st.getFloat("rw"); c.rh = st.getFloat("rh"); c.ro = st.getFloat("ro");
+        c.glass = st.getBoolean("glass") || c.theme == Spec.Theme.GLASS;
+        c.right = st.getBoolean("rh");
+        c.car = car;
 
-        String wallTex = switch (usage) {
-            case PATERNOSTER -> "wall_wood";
-            case CONSTRUCTION -> "wall_mesh";
-            case FREIGHT, CAR -> theme == Spec.Theme.STAINLESS ? "wall_checker" : "wall_" + theme.tex();
-            default -> "wall_" + theme.tex();
-        };
-        boolean glassWalls = st.getBoolean("glass") || theme == Spec.Theme.GLASS;
-        String floorTex = usage == Spec.Usage.FREIGHT || usage == Spec.Usage.CAR || usage == Spec.Usage.CONSTRUCTION ? "floor_checker"
-                : usage == Spec.Usage.PATERNOSTER ? "wall_wood" : "floor_tile";
-
-        // ---------------- 바닥
-        RenderUtil.box(ps, RenderUtil.solid(buf, floorTex), -w / 2, -0.12f, -d / 2, w / 2, 0, d / 2, il, WHITE);
-
-        float fw = st.getFloat("fw"), fh = st.getFloat("fh"), fo = st.getFloat("fo");
-        float rw = st.getFloat("rw"), rh = st.getFloat("rh"), ro = st.getFloat("ro");
-
-        if (usage == Spec.Usage.WHEELCHAIR_LIFT) {
-            renderLift(ps, buf, w, d, il, dt, door, fw, fo, st);
-        } else {
-            boolean openFront = usage == Spec.Usage.PATERNOSTER;
-            VertexConsumer wall = RenderUtil.solid(buf, wallTex);
-            // 측면/후면 벽
-            if (glassWalls) {
-                VertexConsumer g = RenderUtil.glass(buf, "wall_glass");
-                RenderUtil.box(ps, g, -w / 2, 0, -d / 2 + T, -w / 2 + T, h, d / 2 - T, il, WHITE);
-                RenderUtil.box(ps, g, w / 2 - T, 0, -d / 2 + T, w / 2, h, d / 2 - T, il, WHITE);
-                if (rw <= 0) RenderUtil.box(ps, g, -w / 2, 0, -d / 2, w / 2, h, -d / 2 + T, il, WHITE);
-                for (float sx : new float[]{-1, 1}) for (float sz : new float[]{-1, 1})
-                    RenderUtil.fill(ps, buf, sx * w / 2 - 0.05f, 0, sz * d / 2 - 0.05f, sx * w / 2 + 0.05f, h, sz * d / 2 + 0.05f, il, STEEL);
-                RenderUtil.fill(ps, buf, -w / 2, 0.9f, -d / 2 + T, -w / 2 + T + 0.02f, 0.95f, d / 2 - T, il, STEEL);
-                RenderUtil.fill(ps, buf, w / 2 - T - 0.02f, 0.9f, -d / 2 + T, w / 2, 0.95f, d / 2 - T, il, STEEL);
-            } else {
-                RenderUtil.box(ps, wall, -w / 2, 0, -d / 2, -w / 2 + T, h, d / 2, il, WHITE);
-                RenderUtil.box(ps, wall, w / 2 - T, 0, -d / 2, w / 2, h, d / 2, il, WHITE);
-            }
-            if (!glassWalls || rw > 0) frontWall(ps, wall, w, h, -d / 2, -d / 2 + T, rw, rh, ro, il);
-            if (!openFront) frontWall(ps, wall, w, h, d / 2 - T, d / 2, fw, fh, fo, il);
-            // 천장 + 조명
-            RenderUtil.box(ps, wall, -w / 2, h, -d / 2, w / 2, h + 0.06f, d / 2, il, WHITE);
-            if (usage != Spec.Usage.CONSTRUCTION && usage != Spec.Usage.DUMBWAITER) {
-                int lc = lights ? 0xFFFFF4DC : 0xFF505050;
-                RenderUtil.fill(ps, buf, -w / 3, h - 0.015f, -d / 3, w / 3, h, d / 3, lights ? RenderUtil.FULL : il, lc);
-                if (emg) RenderUtil.fill(ps, buf, w / 2 - T - 0.2f, h - 0.03f, -d / 2 + T, w / 2 - T, h, -d / 2 + T + 0.08f, RenderUtil.FULL, 0xFFFFE070);
-                if (st.getBoolean("fan") && lights) RenderUtil.fill(ps, buf, -0.12f, h - 0.02f, d / 2 - T - 0.25f, 0.12f, h - 0.005f, d / 2 - T - 0.05f, il, 0xFF303438);
-            }
-            // 거울 + 핸드레일 (승객용)
-            if (usage.passengerCar() && !glassWalls && rw <= 0) {
-                RenderUtil.box(ps, RenderUtil.solid(buf, "mirror"), -w / 2 + 0.15f, 0.95f, -d / 2 + T, w / 2 - 0.15f, h - 0.25f, -d / 2 + T + 0.008f, il, WHITE);
-                RenderUtil.fill(ps, buf, -w / 2 + 0.2f, 0.88f, -d / 2 + T + 0.05f, w / 2 - 0.2f, 0.92f, -d / 2 + T + 0.08f, il, STEEL);
-            }
-            // 카 도어
-            Spec.DoorType carType = dt == Spec.DoorType.SWING ? Spec.DoorType.GATE : dt;
-            String doorTex = theme == Spec.Theme.GLASS ? "door_glass" : (usage == Spec.Usage.CONSTRUCTION ? "wall_mesh" : "door_" + theme.tex());
-            boolean glassDoor = theme == Spec.Theme.GLASS;
-            if (fw > 0 && !openFront) doorPanels(ps, buf, carType, doorTex, glassDoor, fw, fh, fo - fw / 2, d / 2, false, st.getBoolean("fo2") ? door : 0, il, st.getBoolean("win"));
-            if (rw > 0) doorPanels(ps, buf, carType, doorTex, glassDoor, rw, rh, ro + rw / 2, -d / 2, true, st.getBoolean("ro2") ? door : 0, il, st.getBoolean("win"));
-            // 운전반 / 표시기
-            if (usage.hasCop()) {
-                renderCop(ps, buf, car, st, il);
-                if (fw > 0 && fh + 0.32f < h) indicator(ps, buf, st, fo, fh, d, il);
-                if (st.getBoolean("acc")) renderAccessible(ps, buf, car, st, il);
-            }
-        }
-
-        // ---------------- 승강로 설비 (카 외부)
-        if (st.contains("bot")) shaft(ps, buf, st, usage, drive, w, h, d, carAbs, light, rw > 0);
+        if (c.usage == Spec.Usage.WHEELCHAIR_LIFT) renderLift(c);
+        else cab(c);
+        if (st.contains("bot")) shaft(c);
         ps.popPose();
     }
 
-    private static <E extends Enum<E>> E en(E[] v, int i) { return v[Math.max(0, Math.min(i, v.length - 1))]; }
-
-    /** 문 개구부가 있는 벽 */
-    private void frontWall(PoseStack ps, VertexConsumer wall, float w, float h, float z1, float z2, float dw, float dh, float off, int il) {
-        if (dw <= 0) { RenderUtil.box(ps, wall, -w / 2, 0, z1, w / 2, h, z2, il, WHITE); return; }
-        float l = off - dw / 2, r = off + dw / 2;
-        if (l > -w / 2) RenderUtil.box(ps, wall, -w / 2, 0, z1, l, h, z2, il, WHITE);
-        if (r < w / 2) RenderUtil.box(ps, wall, r, 0, z1, w / 2, h, z2, il, WHITE);
-        if (dh < h) RenderUtil.box(ps, wall, l, dh, z1, r, h, z2, il, WHITE);
+    /** 렌더 공용 상태 */
+    private static final class Ctx {
+        PoseStack ps; MultiBufferSource buf; CompoundTag st; ElevatorCarEntity car;
+        int light, il; float w, h, d, door, carAbs, fw, fh, fo, rw, rh, ro;
+        Spec.Usage usage; Spec.Drive drive; Spec.DoorType dt; Spec.Theme theme; Spec.Ceiling ceiling;
+        boolean lights, emg, glass, right;
     }
 
-    /** 카 도어 문짝 – 카 정면(또는 후면) 바깥쪽 평면 */
-    private void doorPanels(PoseStack ps, MultiBufferSource buf, Spec.DoorType type, String tex, boolean glass, float W, float H,
-                            float origin, float plane, boolean mirror, float p, int il, boolean window) {
-        VertexConsumer vc = glass ? RenderUtil.glass(buf, tex) : RenderUtil.solid(buf, tex);
-        List<float[]> rects = DoorLayout.panels(type, W, H, p);
-        for (float[] r : rects) {
-            float x1 = mirror ? origin - r[1] : origin + r[0];
-            float x2 = mirror ? origin - r[0] : origin + r[1];
-            float off = 0.004f + r[4] * 0.006f;
-            float z1 = mirror ? plane - off - 0.005f : plane + off;
-            float z2 = mirror ? plane - off : plane + off + 0.005f;
-            if (r[5] == 1) RenderUtil.fill(ps, buf, x1, r[2], z1, x2, r[3], z2, il, 0xFF6E7378);
+    private String wallTex(Ctx c) {
+        if (c.usage == Spec.Usage.FREIGHT || c.usage == Spec.Usage.CAR || c.usage == Spec.Usage.CONSTRUCTION)
+            return c.theme == Spec.Theme.STAINLESS || c.theme == Spec.Theme.CHECKER ? "panel_checker" : "panel_" + c.theme.tex();
+        if (c.usage == Spec.Usage.PATERNOSTER) return "panel_wood";
+        if (c.theme == Spec.Theme.CHECKER || c.theme == Spec.Theme.GLASS) return "panel_stainless";
+        return "panel_" + c.theme.tex();
+    }
+
+    private String doorTex(Ctx c) {
+        return switch (c.theme) {
+            case GLASS -> "door_glass";
+            case GOLD -> "door_gold";
+            case WHITE -> "door_white";
+            case CHECKER -> "door_checker";
+            default -> "door_stainless";
+        };
+    }
+
+    // ================================================================== 카 실내/외피
+    private void cab(Ctx c) {
+        PoseStack ps = c.ps;
+        MultiBufferSource buf = c.buf;
+        float w = c.w, h = c.h, d = c.d;
+        boolean freight = c.usage == Spec.Usage.FREIGHT || c.usage == Spec.Usage.CAR || c.usage == Spec.Usage.CONSTRUCTION;
+        boolean openFront = c.usage == Spec.Usage.PATERNOSTER;
+        boolean mesh = c.usage == Spec.Usage.CONSTRUCTION;
+        String wt = wallTex(c);
+        boolean tiled = wt.equals("panel_checker");
+        VertexConsumer wall = tiled ? RenderUtil.solid(buf, "floor_checker") : RenderUtil.solid(buf, wt);
+        VertexConsumer steel = RenderUtil.solid(buf, "steel");
+        VertexConsumer kick = RenderUtil.solid(buf, "kick");
+
+        // ---- 바닥 + 플랫폼
+        String floorTex = freight ? "floor_checker" : c.usage == Spec.Usage.PATERNOSTER ? "panel_wood" : "floor_granite";
+        RenderUtil.box(ps, RenderUtil.solid(buf, floorTex), -w / 2, -0.1f, -d / 2, w / 2, 0, d / 2 - T, c.il, WHITE);
+        RenderUtil.box(ps, steel, -w / 2 - T, -0.22f, -d / 2 - T, w / 2 + T, -0.1f, d / 2, c.light, WHITE);
+
+        // ---- 측면 벽 (외피 + 내부 판넬)
+        float zA = -d / 2, zB = d / 2 - T;            // 측벽 내부 길이 구간
+        for (int sx = -1; sx <= 1; sx += 2) {
+            float xo = sx * (w / 2 + T), xi = sx * w / 2;
+            float x1 = Math.min(xo, xi), x2 = Math.max(xo, xi);
+            if (c.glass) {
+                RenderUtil.panel(ps, RenderUtil.glass(buf, "panel_glass"), x1, 0, zA, x2, h, zB, c.il, WHITE);
+            } else if (mesh) {
+                RenderUtil.box(ps, RenderUtil.cut(buf, "wall_mesh"), x1, 0, zA, x2, h, zB, c.il, WHITE);
+            } else {
+                RenderUtil.box(ps, steel, x1, 0, zA - T, x2, h, d / 2, c.light, WHITE);
+                wallPanels(c, wall, tiled, true, sx, zA, zB);
+            }
+        }
+        // ---- 후면 벽
+        if (c.rw <= 0) {
+            if (c.glass) RenderUtil.panel(ps, RenderUtil.glass(buf, "panel_glass"), -w / 2, 0, -d / 2 - T, w / 2, h, -d / 2, c.il, WHITE);
+            else if (mesh) RenderUtil.box(ps, RenderUtil.cut(buf, "wall_mesh"), -w / 2, 0, -d / 2 - T, w / 2, h, -d / 2, c.il, WHITE);
             else {
-                RenderUtil.box(ps, vc, x1, r[2], z1, x2, r[3], z2, il, WHITE);
-                if (window && r[3] - r[2] > 1.5f) {
-                    float cx = (x1 + x2) / 2;
-                    float wz1 = mirror ? z2 : z1 - 0.002f, wz2 = mirror ? z2 + 0.002f : z1;
-                    RenderUtil.fill(ps, buf, cx - 0.06f, 1.2f, wz1, cx + 0.06f, 1.55f, wz2, il, 0xFF1C2833);
+                RenderUtil.box(ps, steel, -w / 2 - T, 0, -d / 2 - T, w / 2 + T, h, -d / 2, c.light, WHITE);
+                wallPanels(c, wall, tiled, false, 0, -w / 2, w / 2);
+            }
+        } else {
+            frontWall(c, wall, -1);
+        }
+        if (c.glass) {
+            for (float sx : new float[]{-1, 1}) for (float sz : new float[]{-1, 1})
+                RenderUtil.fill(ps, buf, sx * (w / 2 + T / 2) - 0.035f, 0, sz * (d / 2) - 0.035f, sx * (w / 2 + T / 2) + 0.035f, h, sz * (d / 2) + 0.035f, c.il, STEEL);
+        }
+        // ---- 정면 (프런트 리턴 + 트랜섬)
+        if (!openFront) frontWall(c, wall, 1);
+
+        // ---- 킥플레이트 (측/후면 하단)
+        if (!c.glass && !mesh) {
+            for (int sx = -1; sx <= 1; sx += 2) {
+                float xi = sx * w / 2, xk = xi - sx * 0.014f;
+                RenderUtil.panel(ps, kick, Math.min(xi, xk), 0, zA, Math.max(xi, xk), 0.13f, zB, c.il, WHITE);
+            }
+            if (c.rw <= 0) RenderUtil.panel(ps, kick, -w / 2, 0, -d / 2, w / 2, 0.13f, -d / 2 + 0.014f, c.il, WHITE);
+        }
+
+        // ---- 거울(후면 상부) + 핸드레일
+        boolean passenger = c.usage.passengerCar() && !c.glass;
+        if (passenger && c.rw <= 0 && c.theme != Spec.Theme.MIRROR)
+            RenderUtil.panel(ps, RenderUtil.solid(buf, "mirror"), -w / 2 + 0.12f, 1.0f, -d / 2 + 0.014f, w / 2 - 0.12f, h - 0.14f, -d / 2 + 0.02f, c.il, WHITE);
+        if (c.usage.passengerCar() || c.glass) handrails(c);
+        if (freight && !mesh) bumpers(c);
+
+        // ---- 천장
+        ceiling(c, mesh);
+
+        // ---- 카 실(문턱)
+        VertexConsumer sill = RenderUtil.solid(buf, "sill");
+        if (c.fw > 0 && !openFront) RenderUtil.box(ps, sill, c.fo - c.fw / 2 - 0.03f, -0.006f, d / 2 - T, c.fo + c.fw / 2 + 0.03f, 0.004f, d / 2 + 0.032f, c.il, WHITE);
+        if (c.rw > 0) RenderUtil.box(ps, sill, c.ro - c.rw / 2 - 0.03f, -0.006f, -d / 2 - 0.032f, c.ro + c.rw / 2 + 0.03f, 0.004f, -d / 2 + T, c.il, WHITE);
+
+        // ---- 카 도어
+        if (!openFront) {
+            Spec.DoorType carType = c.dt == Spec.DoorType.SWING ? Spec.DoorType.GATE : c.dt;
+            if (c.fw > 0) carDoor(c, carType, c.fw, c.fh, c.fo, false, c.st.getBoolean("fo2") ? c.door : 0);
+            if (c.rw > 0) carDoor(c, carType, c.rw, c.rh, c.ro, true, c.st.getBoolean("ro2") ? c.door : 0);
+        }
+        // ---- 운전반 / 표시기
+        if (c.usage.hasCop()) {
+            cop(c);
+            if (c.fw > 0 && c.h - c.fh >= 0.24f) transomIndicator(c);
+            if (c.st.getBoolean("acc")) accessibleCop(c);
+        }
+    }
+
+    /** 측벽(side=true, sx=±1) 또는 후면 벽의 판넬 분할 */
+    private void wallPanels(Ctx c, VertexConsumer wall, boolean tiled, boolean side, int sx, float a, float b) {
+        float len = b - a;
+        int n = Math.max(1, Math.round(len / 0.72f));
+        float gap = 0.008f, seg = (len - gap * (n - 1)) / n;
+        float y1 = 0.13f, y2 = c.h - 0.05f;
+        for (int i = 0; i < n; i++) {
+            float s1 = a + i * (seg + gap), s2 = s1 + seg;
+            if (side) {
+                float xi = sx * c.w / 2, xp = xi - sx * 0.012f;
+                if (tiled) RenderUtil.box(c.ps, wall, Math.min(xi, xp), y1, s1, Math.max(xi, xp), y2, s2, c.il, WHITE);
+                else RenderUtil.panel(c.ps, wall, Math.min(xi, xp), y1, s1, Math.max(xi, xp), y2, s2, c.il, WHITE);
+            } else {
+                float zi = -c.d / 2;
+                if (tiled) RenderUtil.box(c.ps, wall, s1, y1, zi, s2, y2, zi + 0.012f, c.il, WHITE);
+                else RenderUtil.panel(c.ps, wall, s1, y1, zi, s2, y2, zi + 0.012f, c.il, WHITE);
+            }
+        }
+        // 상부 프리즈(스테인리스 띠)
+        VertexConsumer fr = RenderUtil.solid(c.buf, "kick");
+        if (side) {
+            float xi = sx * c.w / 2, xp = xi - sx * 0.01f;
+            RenderUtil.panel(c.ps, fr, Math.min(xi, xp), y2, a, Math.max(xi, xp), c.h, b, c.il, WHITE);
+        } else RenderUtil.panel(c.ps, fr, a, y2, -c.d / 2, b, c.h, -c.d / 2 + 0.01f, c.il, WHITE);
+    }
+
+    /** 정면(dir=1) 또는 관통형 후면(dir=-1) 벽: 리턴 판넬 + 트랜섬 */
+    private void frontWall(Ctx c, VertexConsumer wall, int dir) {
+        float dw = dir > 0 ? c.fw : c.rw, dh = dir > 0 ? c.fh : c.rh, off = dir > 0 ? c.fo : c.ro;
+        float zo = dir * c.d / 2, zi = zo - dir * T;
+        float z1 = Math.min(zo, zi), z2 = Math.max(zo, zi);
+        float w = c.w, h = c.h;
+        VertexConsumer ret = RenderUtil.solid(c.buf, c.theme == Spec.Theme.WOOD || c.theme == Spec.Theme.WHITE || c.theme == Spec.Theme.MIRROR
+                || c.theme == Spec.Theme.GLASS || c.theme == Spec.Theme.CHECKER ? "panel_stainless" : "panel_" + c.theme.tex());
+        if (dw <= 0) { RenderUtil.panel(c.ps, ret, -w / 2 - T, 0, z1, w / 2 + T, h, z2, c.il, WHITE); return; }
+        float l = off - dw / 2, r = off + dw / 2;
+        if (l > -w / 2 - T) RenderUtil.panel(c.ps, ret, -w / 2 - T, 0, z1, l, h, z2, c.il, WHITE);
+        if (r < w / 2 + T) RenderUtil.panel(c.ps, ret, r, 0, z1, w / 2 + T, h, z2, c.il, WHITE);
+        if (dh < h) RenderUtil.panel(c.ps, ret, l, dh, z1, r, h, z2, c.il, WHITE);
+        // 출입구 안쪽 테두리(리턴 모서리 그림자)
+        float zs = dir > 0 ? z1 - 0.001f : z2 + 0.001f;
+        RenderUtil.fill(c.ps, c.buf, l - 0.008f, 0, Math.min(zs, zs + dir * 0.001f), l, dh, Math.max(zs, zs + dir * 0.001f), c.il, 0xFF5A5E62);
+        RenderUtil.fill(c.ps, c.buf, r, 0, Math.min(zs, zs + dir * 0.001f), r + 0.008f, dh, Math.max(zs, zs + dir * 0.001f), c.il, 0xFF5A5E62);
+    }
+
+    /** 카 도어: 정면 벽 바깥, 빠른 문짝이 가장 바깥(승강장 쪽) */
+    private void carDoor(Ctx c, Spec.DoorType type, float W, float H, float off, boolean rear, float p) {
+        boolean glass = c.theme == Spec.Theme.GLASS;
+        String tex = doorTex(c);
+        VertexConsumer vc = glass ? RenderUtil.glass(c.buf, tex) : RenderUtil.solid(c.buf, tex);
+        List<float[]> rects = DoorLayout.panels(type, W, H, p);
+        int layers = 1;
+        for (float[] r : rects) layers = Math.max(layers, (int) r[4] + 1);
+        boolean mirror = c.right && type.sideOpening();
+        float plane = rear ? -c.d / 2 : c.d / 2;
+        for (float[] r : rects) {
+            float a1 = mirror ? W - r[1] : r[0], a2 = mirror ? W - r[0] : r[1];
+            float lead = mirror ? -r[6] : r[6];
+            // 문 좌표 → 카 x (후면 문은 축이 반대)
+            float x1 = rear ? off + W / 2 - a2 : off - W / 2 + a1;
+            float x2 = rear ? off + W / 2 - a1 : off - W / 2 + a2;
+            if (rear) lead = -lead;
+            float k = 0.004f + (layers - 1 - r[4]) * 0.008f; // 빠른 문짝(layer 0)이 가장 바깥
+            float z1 = rear ? plane - k - 0.006f : plane + k;
+            float z2 = rear ? plane - k : plane + k + 0.006f;
+            if (r[5] == 1) { RenderUtil.fill(c.ps, c.buf, x1, r[2], z1, x2, r[3], z2, c.il, 0xFF6E7378); continue; }
+            RenderUtil.panel(c.ps, vc, x1, r[2], z1, x2, r[3], z2, c.il, WHITE);
+            // 세이프티 슈 / 멀티빔(검은 띠) – 앞날 안쪽 면
+            if (lead != 0 && H > 1.2f) {
+                float ex = lead > 0 ? x2 - 0.018f : x1, ex2 = lead > 0 ? x2 : x1 + 0.018f;
+                float zi = rear ? z2 : z1 - 0.003f, zj = rear ? z2 + 0.003f : z1;
+                RenderUtil.fill(c.ps, c.buf, ex, 0.04f, zi, ex2, H - 0.06f, zj, c.il, 0xFF141414);
+            }
+            if (c.st.getBoolean("win") && r[3] - r[2] > 1.5f && x2 - x1 > 0.25f) {
+                float cx = (x1 + x2) / 2;
+                float zi = rear ? z2 : z1 - 0.002f, zj = rear ? z2 + 0.002f : z1;
+                RenderUtil.fill(c.ps, c.buf, cx - 0.06f, 1.2f, zi, cx + 0.06f, 1.55f, zj, c.il, 0xFF1C2833);
+            }
+        }
+    }
+
+    private void handrails(Ctx c) {
+        float y = 0.9f, r = 0.018f;
+        int col = 0xFFD8DCE0;
+        float z1 = -c.d / 2 + 0.18f, z2 = c.d / 2 - T - 0.28f;
+        for (int sx = -1; sx <= 1; sx += 2) {
+            float x = sx * (c.w / 2 - 0.055f);
+            if (z2 > z1) {
+                RenderUtil.rod(c.ps, c.buf, 'z', z1, z2, x, y, r, c.il, col);
+                for (float bz : new float[]{z1 + 0.05f, z2 - 0.05f})
+                    RenderUtil.fill(c.ps, c.buf, Math.min(x, sx * c.w / 2), y - 0.012f, bz - 0.012f, Math.max(x, sx * c.w / 2), y + 0.012f, bz + 0.012f, c.il, col);
+            }
+        }
+        if (c.rw <= 0) {
+            float z = -c.d / 2 + 0.055f;
+            RenderUtil.rod(c.ps, c.buf, 'x', -c.w / 2 + 0.18f, c.w / 2 - 0.18f, y, z, r, c.il, col);
+            for (float bx : new float[]{-c.w / 2 + 0.25f, c.w / 2 - 0.25f})
+                RenderUtil.fill(c.ps, c.buf, bx - 0.012f, y - 0.012f, -c.d / 2, bx + 0.012f, y + 0.012f, z, c.il, col);
+        }
+    }
+
+    private void bumpers(Ctx c) {
+        int col = 0xFF7A5A36;
+        for (float y : new float[]{0.32f, 0.9f}) {
+            for (int sx = -1; sx <= 1; sx += 2) {
+                float xi = sx * c.w / 2, xb = xi - sx * 0.05f;
+                RenderUtil.fill(c.ps, c.buf, Math.min(xi, xb), y - 0.06f, -c.d / 2 + 0.05f, Math.max(xi, xb), y + 0.06f, c.d / 2 - T - 0.1f, c.il, col);
+            }
+            if (c.rw <= 0) RenderUtil.fill(c.ps, c.buf, -c.w / 2 + 0.05f, y - 0.06f, -c.d / 2, c.w / 2 - 0.05f, y + 0.06f, -c.d / 2 + 0.05f, c.il, col);
+        }
+    }
+
+    private void ceiling(Ctx c, boolean mesh) {
+        PoseStack ps = c.ps;
+        MultiBufferSource buf = c.buf;
+        float w = c.w, h = c.h, d = c.d;
+        int glow = c.lights ? RenderUtil.FULL : c.il;
+        int lightCol = c.lights ? 0xFFFFFFFF : 0xFF707070;
+        // 카 상부 외피
+        RenderUtil.box(ps, RenderUtil.solid(buf, "steel"), -w / 2 - T, h, -d / 2 - T, w / 2 + T, h + 0.05f, d / 2, c.light, WHITE);
+        if (mesh || c.usage == Spec.Usage.DUMBWAITER) {
+            RenderUtil.quadY(ps, RenderUtil.solid(buf, "ceiling_panel"), -w / 2, -d / 2, w / 2, d / 2 - T, h - 0.001f, true, c.il, 0xFFC0C0C0);
+            return;
+        }
+        float cy = h - 0.004f;
+        VertexConsumer panel = RenderUtil.solid(buf, "ceiling_panel");
+        switch (c.ceiling) {
+            case PANEL -> {
+                RenderUtil.quadY(ps, panel, -w / 2, -d / 2, w / 2, d / 2 - T, cy, true, c.il, 0xFFD6D8DA);
+                RenderUtil.quadY(ps, RenderUtil.solid(buf, "ceiling_light"), -w / 2 + 0.14f, -d / 2 + 0.14f, w / 2 - 0.14f, d / 2 - T - 0.14f, cy - 0.003f, true, glow, lightCol);
+                // 조명 테두리
+                RenderUtil.fill(ps, buf, -w / 2 + 0.12f, cy - 0.02f, -d / 2 + 0.12f, w / 2 - 0.12f, cy - 0.004f, -d / 2 + 0.14f, c.il, STEEL);
+                RenderUtil.fill(ps, buf, -w / 2 + 0.12f, cy - 0.02f, d / 2 - T - 0.14f, w / 2 - 0.12f, cy - 0.004f, d / 2 - T - 0.12f, c.il, STEEL);
+                RenderUtil.fill(ps, buf, -w / 2 + 0.12f, cy - 0.02f, -d / 2 + 0.12f, -w / 2 + 0.14f, cy - 0.004f, d / 2 - T - 0.12f, c.il, STEEL);
+                RenderUtil.fill(ps, buf, w / 2 - 0.14f, cy - 0.02f, -d / 2 + 0.12f, w / 2 - 0.12f, cy - 0.004f, d / 2 - T - 0.12f, c.il, STEEL);
+            }
+            case GRID -> {
+                RenderUtil.quadY(ps, panel, -w / 2, -d / 2, w / 2, d / 2 - T, cy, true, c.il, 0xFFB8BCC0);
+                RenderUtil.box(ps, RenderUtil.solid(buf, "ceiling_grid"), -w / 2 + 0.1f, cy - 0.006f, -d / 2 + 0.1f, w / 2 - 0.1f, cy - 0.003f, d / 2 - T - 0.1f, glow, lightCol);
+                RenderUtil.fill(ps, buf, -0.012f, cy - 0.03f, -d / 2 + 0.1f, 0.012f, cy - 0.006f, d / 2 - T - 0.1f, c.il, STEEL);
+                RenderUtil.fill(ps, buf, -w / 2 + 0.1f, cy - 0.03f, -0.012f, w / 2 - 0.1f, cy - 0.006f, 0.012f, c.il, STEEL);
+            }
+            case DOWNLIGHT -> {
+                RenderUtil.quadY(ps, RenderUtil.solid(buf, "panel_stainless"), -w / 2, -d / 2, w / 2, d / 2 - T, cy, true, c.il, WHITE);
+                VertexConsumer dl = RenderUtil.cut(buf, "downlight");
+                int nx = Math.max(1, Math.round(w / 0.6f)), nz = Math.max(1, Math.round((d - T) / 0.7f));
+                for (int i = 0; i < nx; i++) for (int j = 0; j < nz; j++) {
+                    float x = -w / 2 + w * (i + 0.5f) / nx, z = -d / 2 + (d - T) * (j + 0.5f) / nz;
+                    RenderUtil.quadY(ps, dl, x - 0.07f, z - 0.07f, x + 0.07f, z + 0.07f, cy - 0.002f, true, glow, lightCol);
                 }
             }
+            case COVE -> {
+                RenderUtil.quadY(ps, RenderUtil.solid(buf, "panel_stainless"), -w / 2 + 0.16f, -d / 2 + 0.16f, w / 2 - 0.16f, d / 2 - T - 0.16f, cy - 0.06f, true, c.il, WHITE);
+                RenderUtil.quadY(ps, RenderUtil.solid(buf, "ceiling_light"), -w / 2, -d / 2, w / 2, d / 2 - T, cy, true, glow, lightCol);
+            }
         }
+        // 비상등 / 환기구 / CCTV
+        RenderUtil.fill(ps, buf, w / 2 - 0.22f, cy - 0.012f, -d / 2 + 0.05f, w / 2 - 0.06f, cy, -d / 2 + 0.11f, c.emg ? RenderUtil.FULL : c.il, c.emg ? 0xFFFFE070 : 0xFFE8E8E0);
+        RenderUtil.fill(ps, buf, -0.18f, cy - 0.006f, d / 2 - T - 0.1f, 0.18f, cy, d / 2 - T - 0.04f, c.il, c.st.getBoolean("fan") ? 0xFF2A2E32 : 0xFF3A3E42);
+        RenderUtil.fill(ps, buf, -w / 2 + 0.06f, cy - 0.05f, d / 2 - T - 0.12f, -w / 2 + 0.12f, cy, d / 2 - T - 0.06f, c.il, 0xFF101010);
     }
 
-    private void renderLift(PoseStack ps, MultiBufferSource buf, float w, float d, int il, Spec.DoorType dt, float door, float fw, float fo, CompoundTag st) {
-        // 휠체어 리프트: 난간 + 앞 게이트
-        float rh = 1.05f;
-        for (float sx : new float[]{-1, 1}) {
-            RenderUtil.fill(ps, buf, sx * w / 2 - 0.03f, 0, -d / 2, sx * w / 2 + 0.03f, rh, -d / 2 + 0.06f, il, STEEL);
-            RenderUtil.fill(ps, buf, sx * w / 2 - 0.03f, 0, d / 2 - 0.06f, sx * w / 2 + 0.03f, rh, d / 2, il, STEEL);
-            RenderUtil.fill(ps, buf, sx * w / 2 - 0.03f, rh - 0.05f, -d / 2, sx * w / 2 + 0.03f, rh, d / 2, il, AMBER);
-            RenderUtil.fill(ps, buf, sx * w / 2 - 0.03f, 0.5f, -d / 2, sx * w / 2 + 0.03f, 0.54f, d / 2, il, STEEL);
+    // ================================================================== 운전반
+    private void cop(Ctx c) {
+        CarGeometry.Cop cop = CarGeometry.cop(c.car);
+        float[] b = cop.box();
+        PoseStack ps = c.ps;
+        RenderUtil.panel(ps, RenderUtil.solid(c.buf, "cop_face"), b[0], b[1], b[2], b[3], b[4], b[5], c.il, WHITE);
+        ps.pushPose();
+        // 판넬 앞면을 원점, 카 안쪽을 +Z, 오른쪽을 +X 로 하는 좌표계로 변환
+        float pw;
+        if (cop.wall == 0) {
+            ps.translate((b[0] + b[3]) / 2, 0, b[2]);
+            ps.mulPose(Axis.YP.rotationDegrees(180));
+            pw = b[3] - b[0];
+        } else {
+            float face = cop.wall > 0 ? b[0] : b[3];
+            ps.translate(face, 0, (b[2] + b[5]) / 2);
+            ps.mulPose(Axis.YP.rotationDegrees(cop.wall > 0 ? -90 : 90));
+            pw = b[5] - b[2];
         }
-        RenderUtil.fill(ps, buf, -w / 2, rh - 0.05f, -d / 2, w / 2, rh, -d / 2 + 0.05f, il, AMBER);
-        if (fw > 0) doorPanels(ps, buf, Spec.DoorType.GATE, "white", false, Math.min(fw, w), rh, -Math.min(fw, w) / 2, d / 2, false, door, il, false);
-        // 조작 박스
-        RenderUtil.fill(ps, buf, w / 2 - 0.2f, 0.9f, -d / 2 + 0.1f, w / 2 - 0.05f, 1.15f, -d / 2 + 0.25f, il, 0xFF20406A);
+        copFace(c, pw, b[1], b[4], false);
+        ps.popPose();
     }
 
-    private void renderCop(PoseStack ps, MultiBufferSource buf, ElevatorCarEntity car, CompoundTag st, int il) {
-        float[] b = CarGeometry.cop(car);
-        boolean side = b[3] - b[0] < 0.1f; // 측면 벽 설치
-        RenderUtil.box(ps, RenderUtil.solid(buf, "cop_panel"), b[0], b[1], b[2], b[3], b[4], b[5], il, WHITE);
+    /** 운전반 면 그리기 (로컬: x ∈ [-pw/2, pw/2], z=0 이 면, +Z 가 사람 쪽) */
+    private void copFace(Ctx c, float pw, float y1, float y2, boolean compact) {
+        PoseStack ps = c.ps;
+        MultiBufferSource buf = c.buf;
+        CompoundTag st = c.st;
         ListTag names = st.getList("n", Tag.TAG_STRING);
         byte[] calls = st.getByteArray("c");
         int n = names.size();
-        int cols = n <= 10 ? 2 : n <= 21 ? 3 : 4;
-        int rows = Math.max(1, (n + cols - 1) / cols);
-        float top = b[4] - 0.2f, bottom = b[1] + 0.14f;
-        float cell = Math.min(0.075f, (top - bottom) / rows);
-        float bs = cell * 0.75f;
+        float z = 0.001f;
+        // 표시창
+        float dy1 = y2 - 0.17f, dy2 = y2 - 0.05f;
+        RenderUtil.fill(ps, buf, -pw / 2 + 0.03f, dy1, 0, pw / 2 - 0.03f, dy2, z + 0.002f, RenderUtil.FULL, BLACK);
         String cur = n > 0 ? names.getString(Math.max(0, Math.min(st.getInt("cur"), n - 1))) : "";
-        String disp = cur + RenderUtil.arrow(st.getInt("dir"));
-        ps.pushPose();
-        if (side) {
-            // 측면 벽(+X 방향 벽, -X 를 바라봄)에 붙은 경우: 좌표계를 돌려서 정면과 동일하게 그림
-            float cz = (b[2] + b[5]) / 2;
-            ps.translate(b[0], 0, cz);
-            ps.mulPose(Axis.YP.rotationDegrees(90));
-            b = new float[]{-0.15f, b[1], 0f, 0.15f, b[4], 0.04f};
+        int dir = st.getInt("dir");
+        RenderUtil.text(ps, buf, RenderUtil.arrow(dir), -pw / 2 + 0.07f, (dy1 + dy2) / 2, z + 0.003f, 0.06f, 0xFFFF3A1A);
+        RenderUtil.text(ps, buf, cur, 0.02f, (dy1 + dy2) / 2, z + 0.003f, 0.08f, 0xFFFF3A1A);
+        String sk = st.getString("st");
+        if (!sk.isEmpty()) RenderUtil.text(ps, buf, I18n.get("elevmod.status." + sk), 0, dy1 + 0.014f, z + 0.003f, 0.016f, 0xFFFFD040);
+        // 스피커 그릴
+        for (int i = 0; i < 5; i++) {
+            float sx = -0.04f + i * 0.02f;
+            RenderUtil.fill(ps, buf, sx - 0.004f, dy1 - 0.035f, 0, sx + 0.004f, dy1 - 0.015f, z + 0.001f, c.il, 0xFF2A2C30);
         }
-        float face = b[2] - 0.001f;
-        float cx = (b[0] + b[3]) / 2;
-        // 상단 표시창
-        RenderUtil.fill(ps, buf, b[0] + 0.02f, b[4] - 0.17f, face - 0.002f, b[3] - 0.02f, b[4] - 0.03f, face, RenderUtil.FULL, BLACK);
-        RenderUtil.textBack(ps, buf, disp, cx, b[4] - 0.1f, face - 0.003f, 0.08f, 0xFFFF6A1A);
-        String stKey = st.getString("st");
-        if (!stKey.isEmpty()) RenderUtil.textBack(ps, buf, net.minecraft.client.resources.language.I18n.get("elevmod.status." + stKey), cx, b[4] - 0.155f, face - 0.003f, 0.025f, 0xFFFFD040);
         // 층 버튼
-        for (int i = 0; i < n; i++) {
-            int r = i / cols, c = i % cols;
-            float x = b[0] + (b[3] - b[0]) * (c + 0.5f) / cols;
-            float y = bottom + (rows - 1 - r) * cell + cell / 2;
-            boolean lit = i < calls.length && (calls[i] & 1) != 0;
-            RenderUtil.fill(ps, buf, x - bs / 2, y - bs / 2, face - 0.012f, x + bs / 2, y + bs / 2, face, lit ? RenderUtil.FULL : il, lit ? AMBER : 0xFFB8BCC2);
-            RenderUtil.textBack(ps, buf, names.getString(i), x, y, face - 0.013f, bs * 0.55f, lit ? 0xFF3A1E00 : 0xFF202020);
-        }
-        // 열림 / 닫힘 / 비상
-        float by = b[1] + 0.07f;
-        float w3 = (b[3] - b[0]) / 3;
-        String[] lab = {"◀▶", "▶◀", "!"};
-        int[] col = {0xFFD0D4D8, 0xFFD0D4D8, 0xFFF0C020};
-        for (int i = 0; i < 3; i++) {
-            float x = b[0] + w3 * (i + 0.5f);
-            RenderUtil.fill(ps, buf, x - 0.03f, by - 0.03f, face - 0.012f, x + 0.03f, by + 0.03f, face, il, col[i]);
-            RenderUtil.textBack(ps, buf, lab[i], x, by, face - 0.013f, 0.03f, 0xFF202020);
-        }
-        if (st.getBoolean("stop")) {
-            RenderUtil.fill(ps, buf, cx - 0.04f, b[1] + 0.005f, face - 0.012f, cx + 0.04f, b[1] + 0.03f, face, st.getBoolean("sp") ? RenderUtil.FULL : il, 0xFFD02020);
-        }
-        ps.popPose();
-    }
-
-    private void renderAccessible(PoseStack ps, MultiBufferSource buf, ElevatorCarEntity car, CompoundTag st, int il) {
-        float[] b = CarGeometry.accessibleCop(car);
-        RenderUtil.box(ps, RenderUtil.solid(buf, "cop_panel"), b[0], b[1], b[2], b[3], b[4], b[5], il, WHITE);
-        ListTag names = st.getList("n", Tag.TAG_STRING);
-        byte[] calls = st.getByteArray("c");
-        int n = names.size();
-        ps.pushPose();
-        ps.translate(b[3] + 0.001f, 0, 0);
-        ps.mulPose(Axis.YP.rotationDegrees(90)); // 이제 +Z 가 카 안쪽(+X)
-        float len = b[5] - b[2];
-        int cols = Math.max(1, Math.min(n, (int) (len / 0.07f)));
+        int cols = n <= 12 ? 2 : n <= 27 ? 3 : 4;
         int rows = Math.max(1, (n + cols - 1) / cols);
-        float cell = Math.min(0.07f, len / cols);
-        float rowH = (b[4] - b[1] - 0.04f) / Math.max(rows, 1);
-        float bs = Math.min(cell, rowH) * 0.75f;
+        float top = dy1 - 0.06f, bottom = y1 + 0.2f;
+        float cell = Math.min(0.075f, (top - bottom) / rows);
+        float colW = Math.min(0.075f, (pw - 0.04f) / cols);
+        float bs = Math.min(cell, colW) * 0.78f;
+        VertexConsumer off = RenderUtil.cut(buf, "btn"), on = RenderUtil.cut(buf, "btn_lit");
         for (int i = 0; i < n; i++) {
-            int r = i / cols, c = i % cols;
-            // 회전 후 로컬 x = -원래 z
-            float x = -(b[2] + cell * (c + 0.5f));
-            float y = b[4] - 0.02f - rowH * (r + 0.5f);
+            int r = (n - 1 - i) / cols, col = i % cols;
+            float x = (col - (cols - 1) / 2f) * colW;
+            float y = top - r * cell - cell / 2;
             boolean lit = i < calls.length && (calls[i] & 1) != 0;
-            RenderUtil.fill(ps, buf, x - bs / 2, y - bs / 2, 0, x + bs / 2, y + bs / 2, 0.012f, lit ? RenderUtil.FULL : il, lit ? AMBER : 0xFFB8BCC2);
-            RenderUtil.text(ps, buf, names.getString(i), x, y, 0.013f, bs * 0.55f, 0xFF202020);
+            RenderUtil.quadZ(ps, lit ? on : off, x - bs / 2, y - bs / 2, x + bs / 2, y + bs / 2, z + 0.004f, true, lit ? RenderUtil.FULL : c.il, WHITE);
+            RenderUtil.text(ps, buf, names.getString(i), x, y + bs * 0.04f, z + 0.005f, bs * 0.42f, lit ? 0xFFFFB020 : 0xFF1A1A1A);
+        }
+        // 열림 / 닫힘 / 비상벨
+        float by = y1 + 0.11f;
+        float gap = Math.min(0.065f, (pw - 0.04f) / 3);
+        float b2 = Math.min(bs, gap * 0.8f);
+        String[] lab = {"◀▶", "▶◀", "!"};
+        for (int i = 0; i < 3; i++) {
+            float x = (i - 1) * gap;
+            RenderUtil.quadZ(ps, i == 2 ? RenderUtil.cut(buf, "btn_alarm") : off, x - b2 / 2, by - b2 / 2, x + b2 / 2, by + b2 / 2, z + 0.004f, true, c.il, WHITE);
+            RenderUtil.text(ps, buf, lab[i], x, by, z + 0.005f, b2 * 0.32f, 0xFF1A1A1A);
+        }
+        // 키 스위치 + 정격 표기
+        RenderUtil.fill(ps, buf, -0.012f, y1 + 0.03f, 0, 0.012f, y1 + 0.055f, z + 0.002f, c.il, 0xFF202020);
+        int kg = st.getInt("kg");
+        RenderUtil.text(ps, buf, Spec.persons(kg) + "인승 " + kg + "kg", 0, y1 + 0.175f, z + 0.002f, 0.013f, 0xFF303030);
+        if (st.getBoolean("stop"))
+            RenderUtil.quadZ(ps, RenderUtil.cut(buf, "btn"), pw / 2 - 0.05f, y1 + 0.02f, pw / 2 - 0.015f, y1 + 0.055f, z + 0.004f, true, st.getBoolean("sp") ? RenderUtil.FULL : c.il, 0xFFFF4040);
+    }
+
+    private void accessibleCop(Ctx c) {
+        float[] b = CarGeometry.accessibleCop(c.car);
+        PoseStack ps = c.ps;
+        RenderUtil.panel(ps, RenderUtil.solid(c.buf, "cop_face"), b[0], b[1], b[2], b[3], b[4], b[5], c.il, WHITE);
+        ps.pushPose();
+        ps.translate(b[0], 0, (b[2] + b[5]) / 2);
+        ps.mulPose(Axis.YP.rotationDegrees(-90)); // +Z 가 카 안쪽(-X)
+        float len = b[5] - b[2];
+        ListTag names = c.st.getList("n", Tag.TAG_STRING);
+        byte[] calls = c.st.getByteArray("c");
+        int n = names.size();
+        int perRow = Math.max(1, Math.min(n, (int) ((len - 0.04f) / 0.055f)));
+        int rows = Math.max(1, (n + perRow - 1) / perRow);
+        float cell = (len - 0.04f) / perRow;
+        float rowH = (b[4] - b[1] - 0.03f) / rows;
+        float bs = Math.min(cell, rowH) * 0.75f;
+        VertexConsumer off = RenderUtil.cut(c.buf, "btn"), on = RenderUtil.cut(c.buf, "btn_lit");
+        for (int i = 0; i < n; i++) {
+            int r = i / perRow, col = i % perRow;
+            float x = -len / 2 + 0.02f + cell * (col + 0.5f);
+            float y = b[4] - 0.015f - rowH * (r + 0.5f);
+            boolean lit = i < calls.length && (calls[i] & 1) != 0;
+            RenderUtil.quadZ(ps, lit ? on : off, x - bs / 2, y - bs / 2, x + bs / 2, y + bs / 2, 0.004f, true, lit ? RenderUtil.FULL : c.il, WHITE);
+            RenderUtil.text(ps, c.buf, names.getString(i), x, y, 0.005f, bs * 0.42f, lit ? 0xFFFFB020 : 0xFF1A1A1A);
         }
         ps.popPose();
     }
 
-    private void indicator(PoseStack ps, MultiBufferSource buf, CompoundTag st, float fo, float fh, float d, int il) {
-        float z2 = d / 2 - T, z1 = z2 - 0.03f;
-        RenderUtil.fill(ps, buf, fo - 0.22f, fh + 0.06f, z1, fo + 0.22f, fh + 0.28f, z2, RenderUtil.FULL, BLACK);
-        ListTag names = st.getList("n", Tag.TAG_STRING);
+    /** 트랜섬(문 위) 위치표시기 */
+    private void transomIndicator(Ctx c) {
+        float z = c.d / 2 - T;
+        float y1 = c.fh + 0.05f, y2 = Math.min(c.h - 0.06f, c.fh + 0.19f);
+        RenderUtil.fill(c.ps, c.buf, c.fo - 0.16f, y1, z - 0.006f, c.fo + 0.16f, y2, z, RenderUtil.FULL, BLACK);
+        ListTag names = c.st.getList("n", Tag.TAG_STRING);
         int n = names.size();
         if (n == 0) return;
-        String cur = names.getString(Math.max(0, Math.min(st.getInt("cur"), n - 1)));
-        RenderUtil.textBack(ps, buf, RenderUtil.arrow(st.getInt("dir")) + " " + cur, fo, fh + 0.17f, z1 - 0.002f, 0.13f, 0xFFFF3020);
-        if (st.getBoolean("air")) RenderUtil.textBack(ps, buf, "Air-Clean", fo, fh + 0.085f, z1 - 0.002f, 0.025f, 0xFF60D0FF);
+        String cur = names.getString(Math.max(0, Math.min(c.st.getInt("cur"), n - 1)));
+        c.ps.pushPose();
+        c.ps.translate(c.fo, 0, z - 0.007f);
+        c.ps.mulPose(Axis.YP.rotationDegrees(180));
+        RenderUtil.text(c.ps, c.buf, RenderUtil.arrow(c.st.getInt("dir")), -0.08f, (y1 + y2) / 2, 0, 0.08f, 0xFFFF3A1A);
+        RenderUtil.text(c.ps, c.buf, cur, 0.04f, (y1 + y2) / 2, 0, 0.1f, 0xFFFF3A1A);
+        c.ps.popPose();
     }
 
-    /** 가이드레일, 균형추, 로프, 유압잭, 랙 마스트 */
-    private void shaft(PoseStack ps, MultiBufferSource buf, CompoundTag st, Spec.Usage usage, Spec.Drive drive, float w, float h, float d,
-                       float carAbs, int light, boolean hasRear) {
-        if (usage == Spec.Usage.PATERNOSTER) return;
-        float bot = st.getFloat("bot"), top = st.getFloat("top");
-        float yb = bot - carAbs - 1.5f, yt = top - carAbs + h + 1.5f;
+    // ================================================================== 휠체어 리프트
+    private void renderLift(Ctx c) {
+        float w = c.w, d = c.d, rh = 1.05f;
+        int il = c.il;
+        RenderUtil.box(c.ps, RenderUtil.solid(c.buf, "floor_checker"), -w / 2, -0.08f, -d / 2, w / 2, 0, d / 2, il, WHITE);
+        for (int sx = -1; sx <= 1; sx += 2) {
+            float x = sx * w / 2;
+            RenderUtil.rod(c.ps, c.buf, 'y', 0, rh, x, -d / 2 + 0.03f, 0.02f, il, STEEL);
+            RenderUtil.rod(c.ps, c.buf, 'y', 0, rh, x, d / 2 - 0.03f, 0.02f, il, STEEL);
+            RenderUtil.rod(c.ps, c.buf, 'z', -d / 2, d / 2, x, rh, 0.022f, il, 0xFFE8B020);
+            RenderUtil.rod(c.ps, c.buf, 'z', -d / 2, d / 2, x, 0.5f, 0.015f, il, STEEL);
+        }
+        RenderUtil.rod(c.ps, c.buf, 'x', -w / 2, w / 2, rh, -d / 2 + 0.03f, 0.022f, il, 0xFFE8B020);
+        if (c.fw > 0) carDoor(c, Spec.DoorType.GATE, Math.min(c.fw, w), rh, 0, false, c.st.getBoolean("fo2") ? c.door : 0);
+        RenderUtil.fill(c.ps, c.buf, w / 2 - 0.22f, 0.85f, -d / 2 + 0.1f, w / 2 - 0.05f, 1.15f, -d / 2 + 0.25f, il, 0xFF20406A);
+    }
+
+    // ================================================================== 승강로 설비
+    private void shaft(Ctx c) {
+        if (c.usage == Spec.Usage.PATERNOSTER) return;
+        PoseStack ps = c.ps;
+        MultiBufferSource buf = c.buf;
+        float w = c.w, h = c.h, d = c.d;
+        int light = c.light;
+        float bot = c.st.getFloat("bot"), top = c.st.getFloat("top");
+        float yb = bot - c.carAbs - 1.6f, yt = top - c.carAbs + h + 1.6f;
         VertexConsumer rail = RenderUtil.solid(buf, "rail");
-        if (drive == Spec.Drive.RACK_PINION) {
-            RenderUtil.box(ps, rail, w / 2 + 0.05f, yb, -0.15f, w / 2 + 0.35f, yt, 0.15f, light, WHITE);
-            RenderUtil.fill(ps, buf, w / 2, 0, -0.2f, w / 2 + 0.06f, 0.6f, 0.2f, light, 0xFFE0B020);
+        VertexConsumer steel = RenderUtil.solid(buf, "steel");
+        if (c.drive == Spec.Drive.RACK_PINION) {
+            RenderUtil.box(ps, rail, w / 2 + T + 0.05f, yb, -0.15f, w / 2 + T + 0.35f, yt, 0.15f, light, WHITE);
+            RenderUtil.fill(ps, buf, w / 2 + T, 0, -0.2f, w / 2 + T + 0.06f, 0.6f, 0.2f, light, 0xFFE0B020);
             return;
         }
-        for (float sx : new float[]{-1, 1}) {
-            float x1 = sx > 0 ? w / 2 + 0.08f : -w / 2 - 0.16f;
-            RenderUtil.box(ps, rail, x1, yb, -0.05f, x1 + 0.08f, yt, 0.05f, light, WHITE);
+        // 가이드레일 (T형)
+        for (int sx = -1; sx <= 1; sx += 2) {
+            float xr = sx * (w / 2 + T + 0.1f);
+            RenderUtil.box(ps, rail, xr - 0.008f, yb, -0.05f, xr + 0.008f, yt, 0.05f, light, WHITE);
+            float xf = sx * (w / 2 + T + 0.16f);
+            RenderUtil.box(ps, rail, Math.min(xr, xf), yb, -0.006f, Math.max(xr, xf), yt, 0.006f, light, WHITE);
         }
-        if (drive == Spec.Drive.HYDRAULIC) {
-            float pit = bot - carAbs - 1.2f;
-            RenderUtil.fill(ps, buf, -0.09f, pit, -0.09f, 0.09f, -0.12f, 0.09f, light, 0xFFD8DCE0);
-            RenderUtil.fill(ps, buf, -0.15f, pit, -0.15f, 0.15f, pit + 1.0f, 0.15f, light, 0xFF3A4048);
+        // 카 프레임: 스타일(좌우 기둥), 크로스헤드, 세이프티 플랭크, 가이드슈
+        for (int sx = -1; sx <= 1; sx += 2) {
+            float x = sx * (w / 2 + T + 0.04f);
+            RenderUtil.box(ps, steel, x - 0.03f, -0.25f, -0.06f, x + 0.03f, h + 0.25f, 0.06f, light, WHITE);
+            for (float gy : new float[]{-0.2f, h + 0.18f})
+                RenderUtil.fill(ps, buf, Math.min(x, x + sx * 0.06f), gy, -0.04f, Math.max(x, x + sx * 0.06f), gy + 0.1f, 0.04f, light, 0xFF303438);
+        }
+        RenderUtil.box(ps, steel, -w / 2 - T - 0.07f, h + 0.18f, -0.08f, w / 2 + T + 0.07f, h + 0.3f, 0.08f, light, WHITE);
+        RenderUtil.box(ps, steel, -w / 2 - T - 0.07f, -0.34f, -0.08f, w / 2 + T + 0.07f, -0.22f, 0.08f, light, WHITE);
+        // 도어 오퍼레이터(카 상부 정면) + 토가드
+        if (c.fw > 0) {
+            RenderUtil.fill(ps, buf, c.fo - c.fw * 0.9f, h + 0.05f, d / 2 - 0.25f, c.fo + c.fw * 0.9f, h + 0.22f, d / 2 + 0.02f, light, 0xFF3C4046);
+            RenderUtil.fill(ps, buf, c.fo - c.fw / 2, -0.85f, d / 2 - 0.01f, c.fo + c.fw / 2, -0.12f, d / 2, light, 0xFFD0B020);
+        }
+        if (c.drive == Spec.Drive.HYDRAULIC) {
+            float pit = bot - c.carAbs - 1.4f;
+            RenderUtil.rod(ps, buf, 'y', pit, -0.34f, 0, 0, 0.07f, light, 0xFFDDE2E6);
+            RenderUtil.rod(ps, buf, 'y', pit, pit + 1.0f, 0, 0, 0.12f, light, 0xFF3A4048);
             return;
         }
-        // 카 상부 크로스헤드
-        RenderUtil.fill(ps, buf, -w / 2 - 0.1f, h + 0.06f, -0.08f, w / 2 + 0.1f, h + 0.2f, 0.08f, light, 0xFF404448);
-        int my = st.getInt("my");
-        float ropeTop = my != Integer.MIN_VALUE ? my + 0.5f - carAbs : top - carAbs + h + 2.5f;
-        if (drive == Spec.Drive.MRL) ropeTop = top - carAbs + h + 0.8f;
-        for (float rx : new float[]{-0.06f, 0f, 0.06f}) RenderUtil.fill(ps, buf, rx - 0.01f, h + 0.2f, -0.01f, rx + 0.01f, ropeTop, 0.01f, light, 0xFF505458);
-        if (!drive.hasCounterweight()) return;
+        int my = c.st.getInt("my");
+        float ropeTop = my != Integer.MIN_VALUE ? my + 0.5f - c.carAbs : top - c.carAbs + h + 2.5f;
+        if (c.drive == Spec.Drive.MRL) ropeTop = top - c.carAbs + h + 0.8f;
+        for (float rx : new float[]{-0.045f, -0.015f, 0.015f, 0.045f}) RenderUtil.rod(ps, buf, 'y', h + 0.3f, ropeTop, rx, 0, 0.006f, light, 0xFF55595E);
+        if (!c.drive.hasCounterweight()) return;
         float cwH = 1.4f;
-        float cwBottom = (top + h - cwH) - (carAbs - bot) - carAbs;
+        float cwBottom = (top + h - cwH) - (c.carAbs - bot) - c.carAbs;
         float cx1, cx2, cz1, cz2;
-        if (hasRear) { cx1 = w / 2 + 0.22f; cx2 = w / 2 + 0.5f; cz1 = -0.35f; cz2 = 0.35f; }
-        else { cx1 = -0.4f; cx2 = 0.4f; cz1 = -d / 2 - 0.42f; cz2 = -d / 2 - 0.14f; }
-        RenderUtil.box(ps, RenderUtil.solid(buf, "counterweight"), cx1, cwBottom, cz1, cx2, cwBottom + cwH, cz2, light, WHITE);
+        if (c.rw > 0) { cx1 = w / 2 + T + 0.24f; cx2 = w / 2 + T + 0.5f; cz1 = -0.32f; cz2 = 0.32f; }
+        else { cx1 = -0.42f; cx2 = 0.42f; cz1 = -d / 2 - T - 0.36f; cz2 = -d / 2 - T - 0.12f; }
+        RenderUtil.box(ps, RenderUtil.solid(buf, "counterweight"), cx1 + 0.04f, cwBottom + 0.08f, cz1, cx2 - 0.04f, cwBottom + cwH - 0.08f, cz2, light, WHITE);
+        RenderUtil.box(ps, steel, cx1, cwBottom, cz1 - 0.01f, cx1 + 0.04f, cwBottom + cwH, cz2 + 0.01f, light, WHITE);
+        RenderUtil.box(ps, steel, cx2 - 0.04f, cwBottom, cz1 - 0.01f, cx2, cwBottom + cwH, cz2 + 0.01f, light, WHITE);
+        RenderUtil.box(ps, steel, cx1, cwBottom + cwH - 0.08f, cz1 - 0.01f, cx2, cwBottom + cwH, cz2 + 0.01f, light, WHITE);
         float ccx = (cx1 + cx2) / 2, ccz = (cz1 + cz2) / 2;
-        for (float rx : new float[]{-0.05f, 0.05f}) RenderUtil.fill(ps, buf, ccx + rx - 0.01f, cwBottom + cwH, ccz - 0.01f, ccx + rx + 0.01f, ropeTop, ccz + 0.01f, light, 0xFF505458);
+        for (float rx : new float[]{-0.03f, 0f, 0.03f}) RenderUtil.rod(ps, buf, 'y', cwBottom + cwH, ropeTop, ccx + rx, ccz, 0.006f, light, 0xFF55595E);
     }
 }

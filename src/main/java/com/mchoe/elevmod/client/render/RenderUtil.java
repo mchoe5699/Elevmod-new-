@@ -66,6 +66,70 @@ public final class RenderUtil {
         v(vc, m, n, x2, y2, z2, 0, 0, 1, 0, 0, light, c); v(vc, m, n, x2, y1, z2, 0, dy, 1, 0, 0, light, c);
     }
 
+    /** 텍스처를 면마다 한 장으로 늘여 붙이는 상자 (패널, 문짝) */
+    public static void panel(PoseStack ps, VertexConsumer vc, float x1, float y1, float z1, float x2, float y2, float z2, int light, int c) {
+        Matrix4f m = ps.last().pose();
+        Matrix3f n = ps.last().normal();
+        v(vc, m, n, x1, y2, z1, 0, 0, 0, 1, 0, light, c); v(vc, m, n, x1, y2, z2, 0, 1, 0, 1, 0, light, c);
+        v(vc, m, n, x2, y2, z2, 1, 1, 0, 1, 0, light, c); v(vc, m, n, x2, y2, z1, 1, 0, 0, 1, 0, light, c);
+        v(vc, m, n, x1, y1, z1, 0, 0, 0, -1, 0, light, c); v(vc, m, n, x2, y1, z1, 1, 0, 0, -1, 0, light, c);
+        v(vc, m, n, x2, y1, z2, 1, 1, 0, -1, 0, light, c); v(vc, m, n, x1, y1, z2, 0, 1, 0, -1, 0, light, c);
+        v(vc, m, n, x1, y1, z1, 1, 1, 0, 0, -1, light, c); v(vc, m, n, x1, y2, z1, 1, 0, 0, 0, -1, light, c);
+        v(vc, m, n, x2, y2, z1, 0, 0, 0, 0, -1, light, c); v(vc, m, n, x2, y1, z1, 0, 1, 0, 0, -1, light, c);
+        v(vc, m, n, x1, y1, z2, 0, 1, 0, 0, 1, light, c); v(vc, m, n, x2, y1, z2, 1, 1, 0, 0, 1, light, c);
+        v(vc, m, n, x2, y2, z2, 1, 0, 0, 0, 1, light, c); v(vc, m, n, x1, y2, z2, 0, 0, 0, 0, 1, light, c);
+        v(vc, m, n, x1, y1, z1, 0, 1, -1, 0, 0, light, c); v(vc, m, n, x1, y1, z2, 1, 1, -1, 0, 0, light, c);
+        v(vc, m, n, x1, y2, z2, 1, 0, -1, 0, 0, light, c); v(vc, m, n, x1, y2, z1, 0, 0, -1, 0, 0, light, c);
+        v(vc, m, n, x2, y1, z1, 1, 1, 1, 0, 0, light, c); v(vc, m, n, x2, y2, z1, 1, 0, 1, 0, 0, light, c);
+        v(vc, m, n, x2, y2, z2, 0, 0, 1, 0, 0, light, c); v(vc, m, n, x2, y1, z2, 0, 1, 1, 0, 0, light, c);
+    }
+
+    /** z 평면에 놓인 사각형 (front=true 면 +Z 를 바라봄) */
+    public static void quadZ(PoseStack ps, VertexConsumer vc, float x1, float y1, float x2, float y2, float z, boolean front, int light, int c) {
+        Matrix4f m = ps.last().pose();
+        Matrix3f n = ps.last().normal();
+        float nz = front ? 1 : -1;
+        if (front) {
+            v(vc, m, n, x1, y1, z, 0, 1, 0, 0, nz, light, c); v(vc, m, n, x2, y1, z, 1, 1, 0, 0, nz, light, c);
+            v(vc, m, n, x2, y2, z, 1, 0, 0, 0, nz, light, c); v(vc, m, n, x1, y2, z, 0, 0, 0, 0, nz, light, c);
+        } else {
+            v(vc, m, n, x2, y1, z, 0, 1, 0, 0, nz, light, c); v(vc, m, n, x1, y1, z, 1, 1, 0, 0, nz, light, c);
+            v(vc, m, n, x1, y2, z, 1, 0, 0, 0, nz, light, c); v(vc, m, n, x2, y2, z, 0, 0, 0, 0, nz, light, c);
+        }
+    }
+
+    /** y 평면 사각형 (down=true 면 아래를 바라봄, 천장 조명용) */
+    public static void quadY(PoseStack ps, VertexConsumer vc, float x1, float z1, float x2, float z2, float y, boolean down, int light, int c) {
+        Matrix4f m = ps.last().pose();
+        Matrix3f n = ps.last().normal();
+        float ny = down ? -1 : 1;
+        v(vc, m, n, x1, y, z1, 0, 0, 0, ny, 0, light, c); v(vc, m, n, x2, y, z1, 1, 0, 0, ny, 0, light, c);
+        v(vc, m, n, x2, y, z2, 1, 1, 0, ny, 0, light, c); v(vc, m, n, x1, y, z2, 0, 1, 0, ny, 0, light, c);
+    }
+
+    /** 둥근 봉(핸드레일 등) – 축 방향 'x','y','z', 팔각 근사 */
+    public static void rod(PoseStack ps, MultiBufferSource buf, char axis, float a1, float a2, float c1, float c2, float r, int light, int color) {
+        ps.pushPose();
+        switch (axis) {
+            case 'x' -> { ps.translate(0, c1, c2); }
+            case 'z' -> { ps.translate(c1, c2, 0); }
+            default -> { ps.translate(c1, 0, c2); }
+        }
+        for (int i = 0; i < 2; i++) {
+            ps.pushPose();
+            float k = r * 0.92f;
+            switch (axis) {
+                case 'x' -> { ps.mulPose(Axis.XP.rotationDegrees(i * 45)); fill(ps, buf, a1, -k, -k, a2, k, k, light, color); }
+                case 'z' -> { ps.mulPose(Axis.ZP.rotationDegrees(i * 45)); fill(ps, buf, -k, -k, a1, k, k, a2, light, color); }
+                default -> { ps.mulPose(Axis.YP.rotationDegrees(i * 45)); fill(ps, buf, -k, a1, -k, k, a2, k, light, color); }
+            }
+            ps.popPose();
+        }
+        ps.popPose();
+    }
+
+    public static VertexConsumer cut(MultiBufferSource buf, String tex) { return buf.getBuffer(RenderType.entityCutoutNoCull(tex(tex))); }
+
     /** 단색 상자 (흰 텍스처에 색 입힘) */
     public static void fill(PoseStack ps, MultiBufferSource buf, float x1, float y1, float z1, float x2, float y2, float z2, int light, int argb) {
         boxUV(ps, solid(buf, "white"), x1, y1, z1, x2, y2, z2, light, argb, 1f);

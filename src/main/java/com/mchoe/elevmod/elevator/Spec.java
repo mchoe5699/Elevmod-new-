@@ -51,20 +51,48 @@ public final class Spec {
         public boolean hasCounterweight() { return this == GEARED || this == GEARLESS || this == MRL || this == MMR; }
     }
 
-    /** 도어 방식 (엘리베이터/구성 - 도어 문단) */
+    /**
+     * 도어 방식. panels = 한쪽(또는 전체) 문짝 수, center = 중앙개폐 여부.
+     * 망원식(2-speed/3-speed) 문짝은 빠른 문짝이 카-승강장 사이 틈에 가깝게, 느린 문짝이 바깥쪽에 겹쳐 수납된다.
+     */
     public enum DoorType {
-        CO(2.0f),      // 중앙개폐 2짝 (single slide center)
-        CO4(2.4f),     // 2/4 중앙개폐 4짝
-        S1(2.2f),      // 편개 1짝 (single side)
-        S2(2.6f),      // 2짝 편개 (2-speed)
-        S3(3.0f),      // 3짝 편개 (3-speed)
-        UP(4.0f),      // 상승개폐 (화물/자동차용)
-        SWING(1.6f),   // 여닫이문
-        GATE(2.8f);    // 접이식 게이트(팬터그래프)
+        CO(2.0f, 1, true),      // 중앙개폐 2짝
+        CO4(2.4f, 2, true),     // 2-speed 중앙개폐 4짝
+        CO6(2.8f, 3, true),     // 3-speed 중앙개폐 6짝 (대형 화물)
+        S1(2.2f, 1, false),     // 편개 1짝
+        S2(2.6f, 2, false),     // 2-speed 편개 2짝 (2S)
+        S3(3.0f, 3, false),     // 3-speed 편개 3짝 (3S)
+        S4(3.4f, 4, false),     // 4-speed 편개 4짝
+        UP(4.0f, 2, false),     // 상승개폐 (2짝 위로 겹침)
+        BIPART(3.6f, 2, true),  // 상하개폐 (위짝 위로, 아래짝 아래로 – 대형 화물)
+        SWING(1.6f, 1, false),  // 여닫이
+        GATE(2.8f, 1, false);   // 접이식 게이트
 
         public final float seconds;
-        DoorType(float seconds) { this.seconds = seconds; }
+        public final int panels;
+        public final boolean center;
+        DoorType(float seconds, int panels, boolean center) { this.seconds = seconds; this.panels = panels; this.center = center; }
         public String key() { return "elevmod.door." + name().toLowerCase(Locale.ROOT); }
+        public boolean sideOpening() { return !center && this != UP && this != SWING && this != GATE; }
+    }
+
+    /** 승강장 출입구 틀(쟘) */
+    public enum Jamb {
+        NARROW, WIDE, NONE;
+        public String key() { return "elevmod.jamb." + name().toLowerCase(Locale.ROOT); }
+        public float face() { return this == WIDE ? 0.32f : this == NARROW ? 0.1f : 0f; }
+    }
+
+    /** 카 천장 */
+    public enum Ceiling {
+        PANEL, DOWNLIGHT, GRID, COVE;
+        public String key() { return "elevmod.ceiling." + name().toLowerCase(Locale.ROOT); }
+    }
+
+    /** 운전반 위치 / 편개 문 열림 방향 */
+    public enum Side {
+        AUTO, LEFT, RIGHT;
+        public String key() { return "elevmod.side2." + name().toLowerCase(Locale.ROOT); }
     }
 
     public enum Theme {
