@@ -21,7 +21,11 @@ minecraft {
         client {
             workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
+            property 'forge.logging.console.level', 'info'
+            if (project.hasProperty('elevmodPhoto')) {
+                property 'elevmod.photo', 'true'
+                args '--width', '1600', '--height', '900'
+            }
             mods {
                 "${mod_id}" {
                     source sourceSets.main

@@ -310,6 +310,7 @@ public class ControllerBlockEntity extends BlockEntity {
         if (serial.isEmpty()) { serial = String.format("%04d-%03d", lvl.random.nextInt(10000), lvl.random.nextInt(1000)); setChanged(); }
         if (floors.isEmpty()) { removeCars(lvl); return; }
         if (floorS.length != floors.size()) rebuild();
+        if (photo) { updateCar(lvl); if (tick % 2 == 0) pushDisplays(lvl); return; }
         if (holdOpen > 0) holdOpen--;
         if (holdClose > 0) holdClose--;
         if (holdRun > 0) holdRun--;
@@ -1629,6 +1630,25 @@ public class ControllerBlockEntity extends BlockEntity {
         simBrake = true;
         log(lvl, "elevmod.log.brake_fail");
         return true;
+    }
+
+    /** 스크린샷/시연용: 카 위치와 문 열림 정도를 고정 */
+    public boolean photo;
+
+    public void photoFreeze(ServerLevel lvl, float door, double pathS) {
+        photo = true;
+        if (!Double.isNaN(pathS)) { s = pathS; cur = nearestIdx(s); }
+        v = 0;
+        target = -1;
+        doorPos = door;
+        state = door > 0 ? State.OPEN : State.IDLE;
+        if (atFloorPos()) {
+            for (Floor.Door d : floors.get(cur).doors) {
+                if (lvl.getBlockEntity(d.master) instanceof LandingDoorBlockEntity be) be.commandTarget(door, 1f);
+            }
+            landingSolid(lvl, cur, door <= 0);
+        }
+        displayHash++;
     }
 
     private void applyUsageDefaults() {

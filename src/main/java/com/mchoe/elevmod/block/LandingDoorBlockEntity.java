@@ -64,8 +64,9 @@ public class LandingDoorBlockEntity extends BlockEntity {
         sync();
     }
 
-    public void command(boolean open, float spd) {
-        float t = open ? 1f : 0f;
+    public void command(boolean open, float spd) { commandTarget(open ? 1f : 0f, spd); }
+
+    public void commandTarget(float t, float spd) {
         if (target == t && speed == spd) return;
         target = t;
         speed = spd;
