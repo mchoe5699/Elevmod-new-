@@ -15,6 +15,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
 
+import com.mchoe.elevmod.client.design.CustomDesign;
+import com.mchoe.elevmod.client.design.CustomDesigns;
+import com.mchoe.elevmod.client.design.Relief;
+
 import java.util.List;
 
 /**
@@ -43,7 +47,9 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
         float x1 = -0.5f + (W - cw) / 2f, x2 = x1 + cw;      // 유효 개구
         float left = -0.5f, right = W - 0.5f;                  // 문 칸 전체
         float revealZ = -0.32f;                                // 리빌 마감 시작(문짝 바로 앞)
-        String jt = th == Spec.Theme.GOLD ? "jamb_gold" : "jamb";
+        CustomDesign cd = CustomDesigns.get(be.design);
+        CustomDesign.Surface ds = cd == null ? null : cd.landingDoor != null ? cd.landingDoor : cd.door;
+        String jt = cd != null && cd.jambTex != null ? cd.jambTex : th == Spec.Theme.GOLD ? "jamb_gold" : "jamb";
         VertexConsumer jamb = RenderUtil.solid(buf, jt);
 
         // ---- 칸 안의 남는 부분(유효 개구 밖) 채움 + 리빌 마감
@@ -74,7 +80,7 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
         }
 
         // ---- 알루미늄 실(문턱): 승강로 면부터 홀 쪽까지
-        RenderUtil.box(ps, RenderUtil.solid(buf, "sill"), x1 - 0.03f, -0.004f, -0.5f, x2 + 0.03f, 0.004f, -0.3f, light, WHITE);
+        RenderUtil.box(ps, RenderUtil.solid(buf, cd != null && cd.sillTex != null ? cd.sillTex : "sill"), x1 - 0.03f, -0.004f, -0.5f, x2 + 0.03f, 0.004f, -0.3f, light, WHITE);
 
         // ---- 문짝
         boolean glass = th == Spec.Theme.GLASS;
@@ -84,22 +90,28 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
             ps.pushPose();
             ps.translate(x1, 0, 0.42f);
             ps.mulPose(Axis.YP.rotationDegrees(-90 * p));
-            float[] sw = glass ? null : RenderUtil.windowRect(be.window, 0, cw, 0, chh);
-            if (sw == null) RenderUtil.panel(ps, vc, 0, 0, -0.045f, cw, chh, 0, light, WHITE);
-            else RenderUtil.panelWindow(ps, buf, vc, 0, 0, -0.045f, cw, chh, 0, sw[0], sw[1], sw[2], sw[3], light, WHITE);
+            float[] sw = glass ? null : RenderUtil.windowRect(be.winMask != 0, 0, cw, 0, chh);
+            RenderUtil.doorPanel(ps, buf, vc, 0, 0, -0.045f, cw, chh, 0, sw, ds == null, true, light, WHITE);
+            if (ds != null) Relief.draw(ps, buf, ds, new Relief.Frame(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), cw, chh, light, sw);
             RenderUtil.fill(ps, buf, cw - 0.12f, 0.95f, 0, cw - 0.08f, 1.08f, 0.05f, light, 0xFF303030);
             ps.popPose();
         } else {
             boolean mirror = be.rightHand && t.sideOpening();
             List<float[]> rects = DoorLayout.panels(t, cw, chh, p);
-            for (float[] r : rects) {
+            int[] rank = DoorLayout.rank(t, cw, chh, mirror);
+            for (int ri = 0; ri < rects.size(); ri++) {
+                float[] r = rects.get(ri);
                 float a1 = mirror ? cw - r[1] : r[0], a2 = mirror ? cw - r[0] : r[1];
                 float px1 = x1 + a1, px2 = x1 + a2;
                 float z1 = PANEL_Z0 + r[4] * PANEL_STEP, z2 = z1 + PANEL_T;
                 if (r[5] == 1) { RenderUtil.fill(ps, buf, px1, r[2], z1, px2, r[3], z2, light, 0xFF6E7378); continue; }
-                float[] win = glass ? null : RenderUtil.windowRect(be.window, px1, px2, r[2], r[3]);
-                if (win == null) RenderUtil.panel(ps, vc, px1, r[2], z1, px2, r[3], z2, light, WHITE);
-                else RenderUtil.panelWindow(ps, buf, vc, px1, r[2], z1, px2, r[3], z2, win[0], win[1], win[2], win[3], light, WHITE);
+                float[] win = glass ? null : RenderUtil.windowRect(DoorLayout.hasWindow(be.winMask, rank[ri]), px1, px2, r[2], r[3]);
+                RenderUtil.doorPanel(ps, buf, vc, px1, r[2], z1, px2, r[3], z2, win, ds == null, true, light, WHITE);
+                if (ds != null) {
+                    // 승강장 쪽 면을 커스텀 디자인으로 (오목한 부분은 문짝 두께 안으로)
+                    float[] lw = win == null ? null : new float[]{win[0] - px1, win[1] - r[2], win[2] - px1, win[3] - r[2]};
+                    Relief.draw(ps, buf, ds, new Relief.Frame(px1, r[2], z2, 1, 0, 0, 0, 1, 0, 0, 0, 1), px2 - px1, r[3] - r[2], light, lw);
+                }
             }
         }
         ps.popPose();

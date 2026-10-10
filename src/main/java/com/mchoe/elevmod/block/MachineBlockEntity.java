@@ -48,6 +48,7 @@ public class MachineBlockEntity extends BlockEntity {
         if (ctrl != null) t.putLong("ctrl", ctrl.asLong());
         t.putFloat("speed", speed);
         t.putInt("drive", drive);
+        t.putLong("origin", worldPosition.asLong());
     }
 
     @Override
@@ -56,6 +57,19 @@ public class MachineBlockEntity extends BlockEntity {
         ctrl = t.contains("ctrl") ? BlockPos.of(t.getLong("ctrl")) : null;
         speed = t.getFloat("speed");
         drive = t.getInt("drive");
+        if (t.contains("origin") && ctrl != null) {
+            BlockPos o = BlockPos.of(t.getLong("origin"));
+            if (!o.equals(worldPosition)) { ctrl = ctrl.offset(worldPosition.subtract(o)); moved = true; }
+        }
+    }
+
+    /** 복사로 좌표가 옮겨졌으면 새 좌표가 저장되도록 표시 */
+    private boolean moved;
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (moved && level != null && !level.isClientSide) { moved = false; setChanged(); }
     }
 
     @Override

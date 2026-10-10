@@ -128,6 +128,7 @@ public class DeviceBlockEntity extends BlockEntity {
         t.putInt("fl", flags);
         t.putInt("design", design);
         t.putInt("offX", offX); t.putInt("offY", offY);
+        t.putLong("origin", worldPosition.asLong());
         ListTag l = new ListTag();
         for (String n : names) l.add(StringTag.valueOf(n));
         t.put("names", l);
@@ -149,6 +150,14 @@ public class DeviceBlockEntity extends BlockEntity {
         dumbwaiter = (f & 256) != 0; redstoneLast = (f & 512) != 0;
         design = t.getInt("design");
         offX = t.getInt("offX"); offY = t.getInt("offY");
+        if (t.contains("origin")) {
+            BlockPos o = BlockPos.of(t.getLong("origin"));
+            if (!o.equals(worldPosition)) {
+                BlockPos d = worldPosition.subtract(o);
+                if (ctrl != null) ctrl = ctrl.offset(d);
+                floorY += d.getY(); moved = true;
+            }
+        }
         names.clear();
         ListTag l = t.getList("names", Tag.TAG_STRING);
         for (Tag x : l) names.add(x.getAsString());
@@ -156,6 +165,15 @@ public class DeviceBlockEntity extends BlockEntity {
 
     @Override
     public net.minecraft.world.phys.AABB getRenderBoundingBox() { return new net.minecraft.world.phys.AABB(worldPosition).inflate(1.2); }
+
+    /** 복사로 좌표가 옮겨졌으면 새 좌표가 저장되도록 표시 */
+    private boolean moved;
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (moved && level != null && !level.isClientSide) { moved = false; setChanged(); }
+    }
 
     @Override
     public CompoundTag getUpdateTag() { return saveWithoutMetadata(); }

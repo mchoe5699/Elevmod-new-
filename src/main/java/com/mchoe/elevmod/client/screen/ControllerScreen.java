@@ -23,9 +23,9 @@ public class ControllerScreen extends Screen {
     public final BlockPos pos;
     private CompoundTag data;
     private int tab = 0, renameIdx = 0;
-    private EditBox nameBox;
+    private EditBox nameBox, serialBox;
     private final List<String> info = new ArrayList<>();
-    private static final String[] TABS = {"elevmod.tab.spec", "elevmod.tab.options", "elevmod.tab.floors", "elevmod.tab.operation", "elevmod.tab.info", "elevmod.tab.size", "elevmod.tab.design"};
+    private static final String[] TABS = {"elevmod.tab.spec", "elevmod.tab.options", "elevmod.tab.floors", "elevmod.tab.operation", "elevmod.tab.info", "elevmod.tab.size", "elevmod.tab.design", "elevmod.tab.door"};
 
     public ControllerScreen(BlockPos pos, CompoundTag data) {
         super(Component.translatable("elevmod.screen.controller"));
@@ -36,8 +36,10 @@ public class ControllerScreen extends Screen {
     public void update(CompoundTag t) {
         this.data = t;
         String keep = nameBox != null ? nameBox.getValue() : "";
+        String keepS = serialBox != null && serialBox.isFocused() ? serialBox.getValue() : null;
         rebuildWidgets();
         if (nameBox != null) nameBox.setValue(keep);
+        if (serialBox != null && keepS != null) { serialBox.setValue(keepS); serialBox.setFocused(true); }
     }
 
     private void edit(String key, int delta, String text) { Net.CH.sendToServer(new Net.EditMsg(pos, key, delta, text)); }
@@ -62,7 +64,21 @@ public class ControllerScreen extends Screen {
         return Component.translatable("elevmod.size.auto");
     }
 
-    private record Row(String key, String label, Function<CompoundTag, Component> value) {}
+    private record Row(String key, String label, Function<CompoundTag, Component> value, String arg, String labelArg) {
+        Row(String key, String label, Function<CompoundTag, Component> value) { this(key, label, value, "", null); }
+    }
+
+    private Component secs(CompoundTag t, String key, float auto) {
+        float v = t.getFloat(key);
+        if (v > 0) return Component.translatable("elevmod.sec1", String.format("%.1f", v)).withStyle(ChatFormatting.AQUA);
+        return Component.translatable("elevmod.sec_auto", String.format("%.1f", auto));
+    }
+
+    /** 방범창 문짝 이름: 닫힌 상태에서 승강장에서 볼 때 순번 */
+    private static String panelName(Spec.DoorType dt, int i, int n) {
+        if (dt == Spec.DoorType.UP || dt == Spec.DoorType.BIPART) return I18n.get(i == 0 ? "elevmod.panel.top" : "elevmod.panel.bottom");
+        return I18n.get("elevmod.panel.nth", i + 1, n);
+    }
 
     private List<Row> rows() {
         List<Row> r = new ArrayList<>();
@@ -126,6 +142,30 @@ public class ControllerScreen extends Screen {
                 r.add(new Row("disp", "elevmod.set.disp", t -> Component.translatable(en(Spec.Display.values(), t.getInt("carDisplay")).key())));
                 r.add(new Row("wallf", "elevmod.set.wallf", t -> Component.translatable(en(Spec.WallFinish.values(), t.getInt("wallFinish")).key())));
                 r.add(new Row("floorf", "elevmod.set.floorf", t -> Component.translatable(en(Spec.FloorFinish.values(), t.getInt("floorFinish")).key())));
+                r.add(new Row("designmode", "elevmod.set.designmode", t -> Component.translatable(en(Spec.DesignMode.values(), t.getInt("designMode")).key())));
+                r.add(new Row("customdesign", "elevmod.set.customdesign", t -> {
+                    String id = t.getString("customDesign");
+                    if (id.isEmpty()) return Component.translatable("elevmod.none");
+                    var cd = com.mchoe.elevmod.client.design.CustomDesigns.get(id);
+                    return Component.literal(cd == null ? id : cd.name());
+                }));
+            }
+            case 7 -> {
+                Spec.DoorType dt = en(Spec.DoorType.values(), data.getInt("doorType"));
+                r.add(new Row("opensec", "elevmod.set.opensec", t -> secs(t, "openSec", dt.seconds)));
+                r.add(new Row("closesec", "elevmod.set.closesec", t -> secs(t, "closeSec", dt.seconds / 0.85f)));
+                r.add(new Row("window", "elevmod.set.window", t -> onOff("window")));
+                r.add(new Row("winside", "elevmod.set.winside", t -> Component.translatable("elevmod.winside." + t.getInt("windowSide"))));
+                r.add(new Row("winall", "elevmod.set.winall", t -> Component.translatable(t.getInt("windowMask") == -1 ? "elevmod.winall.all" : "elevmod.winall.some")));
+                int n = dt.totalPanels();
+                for (int i = 0; i < Math.min(n, 11); i++) {
+                    final int bit = i;
+                    r.add(new Row("winpanel", "", t -> {
+                        int m = t.getInt("windowMask");
+                        boolean on = t.getBoolean("window") && (m == -1 || (m & (1 << bit)) != 0);
+                        return on ? Component.translatable("elevmod.win.on").withStyle(ChatFormatting.GREEN) : Component.translatable("elevmod.win.off").withStyle(ChatFormatting.GRAY);
+                    }, String.valueOf(i), panelName(dt, i, n)));
+                }
             }
             default -> {}
         }
@@ -139,7 +179,7 @@ public class ControllerScreen extends Screen {
         for (int i = 0; i < TABS.length; i++) {
             final int ti = i;
             Button b = Button.builder(Component.translatable(TABS[i]).withStyle(i == tab ? ChatFormatting.YELLOW : ChatFormatting.WHITE), x -> { tab = ti; rebuildWidgets(); })
-                    .bounds(left + i * 49, top, 47, 18).build();
+                    .bounds(left + i * 43, top, 41, 18).build();
             addRenderableWidget(b);
         }
         int y0 = top + 26;
@@ -150,7 +190,7 @@ public class ControllerScreen extends Screen {
             int col = i / perCol, ri = i % perCol;
             int x = left + col * 172 + 92;
             int y = y0 + ri * 22;
-            addRenderableWidget(Button.builder(row.value().apply(data), b -> edit(row.key(), Screen.hasShiftDown() ? -1 : 1, ""))
+            addRenderableWidget(Button.builder(row.value().apply(data), b -> edit(row.key(), Screen.hasShiftDown() ? -1 : 1, row.arg()))
                     .bounds(x, y, 78, 20).build());
         }
         nameBox = null;
@@ -171,6 +211,18 @@ public class ControllerScreen extends Screen {
                 addRenderableWidget(Button.builder(Component.translatable("elevmod.set.reset_name"), b -> edit("rename", renameIdx, ""))
                         .bounds(left + 252, y, 70, 20).build());
             }
+        }
+        serialBox = null;
+        if (tab == 0) {
+            int y = y0 + 6 * 22 + 10;
+            serialBox = new EditBox(font, left + 92, y, 90, 20, Component.literal("serial"));
+            serialBox.setMaxLength(16);
+            serialBox.setValue(data.getString("serial"));
+            addRenderableWidget(serialBox);
+            addRenderableWidget(Button.builder(Component.translatable("elevmod.set.apply"), b -> edit("serial", 0, serialBox.getValue()))
+                    .bounds(left + 186, y, 50, 20).build());
+            addRenderableWidget(Button.builder(Component.translatable("elevmod.set.serial_auto"), b -> edit("serial", 0, ""))
+                    .bounds(left + 240, y, 70, 20).build());
         }
         if (tab == 5) {
             addRenderableWidget(Button.builder(Component.translatable("elevmod.set.size_auto"), b -> edit("size_auto", 0, ""))
@@ -202,7 +254,8 @@ public class ControllerScreen extends Screen {
         List<Row> rows = rows();
         for (int i = 0; i < rows.size(); i++) {
             int col = i / 8, ri = i % 8;
-            g.drawString(font, I18n.get(rows.get(i).label()), left + col * 172, y0 + ri * 22 + 6, 0xFFDDDDDD, false);
+            Row rw = rows.get(i);
+            g.drawString(font, rw.labelArg() != null ? I18n.get("elevmod.set.winpanel", rw.labelArg()) : I18n.get(rw.label()), left + col * 172, y0 + ri * 22 + 6, 0xFFDDDDDD, false);
         }
         String state = I18n.get(data.getString("modeK")) + " / " + data.getString("state") + (data.getBoolean("powerOff") ? " / " + I18n.get("elevmod.status.power") : "")
                 + (!"elevmod.fault.none".equals(data.getString("faultK")) ? " / " + I18n.get(data.getString("faultK")) : "");
@@ -212,6 +265,8 @@ public class ControllerScreen extends Screen {
                     left + 120, y0 + 8 * 22 + 12, 0xFFAAAAAA, false);
             g.drawString(font, I18n.get("elevmod.info.size_hint"), left, y0 + 8 * 22 + 32, 0xFF888888, false);
         }
+        if (tab == 0) g.drawString(font, I18n.get("elevmod.set.serial"), left, y0 + 6 * 22 + 16, 0xFFDDDDDD, false);
+        if (tab == 7) g.drawString(font, I18n.get("elevmod.info.window_hint"), left, y0 + 8 * 22 + 12, 0xFF888888, false);
         if (tab == 6) g.drawString(font, I18n.get("elevmod.info.design_hint"), left, y0 + 8 * 22 + 12, 0xFF888888, false);
         if (tab == 0) {
             g.drawString(font, I18n.get("elevmod.info.dims", String.format("%.2f", data.getFloat("cw")), String.format("%.2f", data.getFloat("cd")), String.format("%.2f", data.getFloat("ch"))),

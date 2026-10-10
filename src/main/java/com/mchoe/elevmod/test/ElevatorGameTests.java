@@ -190,4 +190,27 @@ public class ElevatorGameTests {
                 .thenWaitUntil(() -> h.assertTrue(doorsOpenAt(c, 2), "등록한 층으로 운행"))
                 .thenSucceed();
     }
+
+    /** 제어반을 복사·붙여넣기(NBT 그대로 다른 위치에 로드)하면 새 고유번호를 받고, 연결 좌표가 같은 만큼 옮겨져야 한다 */
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void copiedControllerGetsNewSerial(GameTestHelper h) {
+        ControllerBlockEntity c = build(h, 4, 0);
+        ServerLevel lvl = h.getLevel();
+        ControllerBlockEntity[] copy = new ControllerBlockEntity[1];
+        h.startSequence()
+                .thenExecuteAfter(3, () -> {
+                    h.assertTrue(!c.serial.isEmpty(), "고유번호 자동 부여");
+                    net.minecraft.nbt.CompoundTag tag = c.saveWithoutMetadata();
+                    BlockPos rel = new BlockPos(0, 1, 2);
+                    h.setBlock(rel, ModRegistry.CONTROLLER.get().defaultBlockState());
+                    copy[0] = (ControllerBlockEntity) lvl.getBlockEntity(h.absolutePos(rel));
+                    copy[0].load(tag);
+                    h.assertTrue(copy[0].floors.get(0).doors.get(0).master.equals(c.floors.get(0).doors.get(0).master.offset(0, 0, 2)), "문 좌표가 복사 위치만큼 이동");
+                })
+                .thenExecuteAfter(3, () -> {
+                    h.assertTrue(!copy[0].serial.isEmpty() && !copy[0].serial.equals(c.serial), "복사본은 새 고유번호 (" + c.serial + " / " + copy[0].serial + ")");
+                    h.assertTrue(copy[0].carIds.isEmpty() || !copy[0].carIds.equals(c.carIds), "원본 카를 공유하지 않음");
+                })
+                .thenSucceed();
+    }
 }

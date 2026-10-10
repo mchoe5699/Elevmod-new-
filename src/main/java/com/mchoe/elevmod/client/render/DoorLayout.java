@@ -78,4 +78,28 @@ public final class DoorLayout {
             default -> 0f;
         };
     }
+
+    /**
+     * 각 문짝(panels() 순서)의 '순번': 닫힌 상태에서 승강장에서 볼 때 왼쪽→오른쪽(상하 개폐는 위→아래).
+     * 방범창 선택(비트마스크)에 쓴다. mirror = 오른쪽 열림 편개.
+     */
+    public static int[] rank(Spec.DoorType type, float W, float H, boolean mirror) {
+        List<float[]> closed = panels(type, W, H, 0);
+        int n = closed.size();
+        Integer[] idx = new Integer[n];
+        for (int i = 0; i < n; i++) idx[i] = i;
+        boolean vertical = type == Spec.DoorType.UP || type == Spec.DoorType.BIPART;
+        java.util.Arrays.sort(idx, (a, b) -> {
+            float[] ra = closed.get(a), rb = closed.get(b);
+            if (vertical) return Float.compare(rb[2] + rb[3], ra[2] + ra[3]);
+            float ca = (ra[0] + ra[1]) / 2, cb = (rb[0] + rb[1]) / 2;
+            if (mirror) { ca = W - ca; cb = W - cb; }
+            return Float.compare(ca, cb);
+        });
+        int[] out = new int[n];
+        for (int r = 0; r < n; r++) out[idx[r]] = r;
+        return out;
+    }
+
+    public static boolean hasWindow(int mask, int rank) { return mask == -1 || (mask & (1 << rank)) != 0; }
 }

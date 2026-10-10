@@ -83,6 +83,18 @@ public class ControllerBlockEntity extends BlockEntity {
     public Spec.CopKeys copKeys = Spec.CopKeys.BUTTONS;
     /** 행선층 예약(DD) 운전 중에도 카 운전반에 층 버튼을 둘지 */
     public boolean ddCopButtons = false;
+    /** 방범창을 달 문짝 (닫힌 상태에서 승강장에서 볼 때 왼쪽→오른쪽 / 위→아래 순번 비트), -1 = 모든 문짝 */
+    public int windowMask = -1;
+    /** 방범창 적용 문: 0 = 승강장 문 + 카 도어, 1 = 승강장 문만, 2 = 카 도어만 */
+    public int windowSide = 0;
+    /** 문 열림/닫힘 시간(초), 0 = 도어 방식 기본값 */
+    public float openSec = 0, closeSec = 0;
+    /** 디자인 모드: 기본 디자인 / 커스텀 디자인(customDesign id) */
+    public Spec.DesignMode designMode = Spec.DesignMode.BASIC;
+    public String customDesign = "";
+    /** 복사(월드에딧·/clone) 감지를 위해 저장 당시 위치를 기록 */
+    private boolean relocated;
+    private boolean serialChecked;
     public String serial = "";
 
     // ------------------------------------------------------------ 구조
@@ -337,7 +349,19 @@ public class ControllerBlockEntity extends BlockEntity {
 
     private void tickServer(ServerLevel lvl) {
         tick++;
-        if (serial.isEmpty()) { serial = String.format("%04d-%03d", lvl.random.nextInt(10000), lvl.random.nextInt(1000)); setChanged(); }
+        if (!serialChecked) {
+            serialChecked = true;
+            SerialRegistry reg = SerialRegistry.get(lvl);
+            // 비어 있거나, 복사(붙여넣기)되었거나, 다른 제어반이 이미 쓰는 번호면 새 번호 부여
+            if (serial.isEmpty() || relocated || reg.taken(lvl, serial, worldPosition)) {
+                String old = serial;
+                serial = newSerial(lvl);
+                if (relocated && !old.isEmpty()) ElevMod.LOG.info("[elevmod] copied controller at {}: serial {} -> {}", worldPosition, old, serial);
+                relocated = false;
+                setChanged();
+            }
+            reg.register(serial, worldPosition);
+        }
         if (floors.isEmpty()) { removeCars(lvl); return; }
         if (floorS.length != floors.size()) rebuild();
         if (photo) { updateCar(lvl); if (tick % 2 == 0) pushDisplays(lvl); return; }
@@ -585,7 +609,7 @@ public class ControllerBlockEntity extends BlockEntity {
             return;
         }
         if (doorPos > 0) { // 문부터 닫고 이동
-            doorPos = Math.max(0f, doorPos - doorSpeed());
+            doorPos = Math.max(0f, doorPos - closeSpeed());
             if (doorPos == 0) landingSolid(lvl, cur, true);
             return;
         }
@@ -600,7 +624,12 @@ public class ControllerBlockEntity extends BlockEntity {
     }
 
     // ---------------------------------------------------------------- 도어
-    private float doorSpeed() { return 1f / (doorType.seconds * 20f); }
+    /** 문 열림 시간(초) – 설정값 또는 도어 방식 기본값 */
+    public float openSeconds() { return openSec > 0 ? openSec : doorType.seconds; }
+    /** 문 닫힘 시간(초) – 기본은 열림보다 조금 느리게(안전) */
+    public float closeSeconds() { return closeSec > 0 ? closeSec : doorType.seconds / 0.85f; }
+    private float doorSpeed() { return 1f / (openSeconds() * 20f); }
+    private float closeSpeed() { return 1f / (closeSeconds() * 20f); }
 
     private boolean canOpenAt(int idx) { return idx >= 0 && idx < floors.size() && !floors.get(idx).doors.isEmpty(); }
 
@@ -662,7 +691,7 @@ public class ControllerBlockEntity extends BlockEntity {
                     else { reopen(lvl); if (beep) playAt(lvl, carPos(), SoundEvents.NOTE_BLOCK_HAT.value(), 0.6f, 1.6f); return; }
                 }
                 if (nudge && tick % 10 == 0) playAt(lvl, carPos(), SoundEvents.NOTE_BLOCK_DIDGERIDOO.value(), 0.7f, 1.2f);
-                doorPos = Math.max(0f, doorPos - doorSpeed() * (nudge ? 0.5f : 0.85f));
+                doorPos = Math.max(0f, doorPos - closeSpeed() * (nudge ? 0.6f : 1f));
                 if (doorPos <= 0) {
                     doorPos = 0;
                     landingSolid(lvl, cur, true);
@@ -700,7 +729,7 @@ public class ControllerBlockEntity extends BlockEntity {
     private void landingTarget(ServerLevel lvl, int idx, boolean open) {
         if (idx < 0 || idx >= floors.size()) return;
         for (Floor.Door d : floors.get(idx).doors) {
-            if (lvl.isLoaded(d.master) && lvl.getBlockEntity(d.master) instanceof LandingDoorBlockEntity be) be.command(open, doorSpeed());
+            if (lvl.isLoaded(d.master) && lvl.getBlockEntity(d.master) instanceof LandingDoorBlockEntity be) be.command(open, open ? doorSpeed() : closeSpeed());
         }
     }
 
@@ -980,7 +1009,9 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putBoolean("fan", riders > 0 || state != State.IDLE);
         t.putBoolean("air", airClean);
         t.putBoolean("ac", aircon);
-        t.putBoolean("win", window);
+        t.putBoolean("win", window && windowSide != 1);
+        t.putInt("winm", windowMask);
+        t.putString("dsg", designMode == Spec.DesignMode.CUSTOM ? customDesign : "");
         t.putBoolean("acc", accessibleCop && usage.passengerCar());
         t.putBoolean("stop", stopSwitch);
         t.putBoolean("dd", destination);
@@ -1513,7 +1544,7 @@ public class ControllerBlockEntity extends BlockEntity {
             if (lvl.getBlockEntity(c) instanceof LandingDoorBlockEntity be) {
                 int col = c.getX() * a.getStepX() + c.getZ() * a.getStepZ();
                 be.link(worldPosition, c.equals(d.master), col - minCol, c.getY() - minY, d.w, d.h);
-                be.style(doorType, theme, window, jamb, rightHand(), effW(d.w), effH(d.h));
+                be.style(doorType, theme, landingWindowMask(), jamb, rightHand(), effW(d.w), effH(d.h), designMode == Spec.DesignMode.CUSTOM ? customDesign : "");
             }
         }
         if (lobbyY == Integer.MIN_VALUE) lobbyY = minY;
@@ -1592,6 +1623,7 @@ public class ControllerBlockEntity extends BlockEntity {
     }
 
     public void onBroken(ServerLevel lvl) {
+        SerialRegistry.get(lvl).unregister(serial, worldPosition);
         removeCars(lvl);
         for (Floor f : floors) for (Floor.Door d : f.doors) for (BlockPos c : d.cells) {
             if (lvl.getBlockEntity(c) instanceof LandingDoorBlockEntity be) be.unlink();
@@ -1603,10 +1635,30 @@ public class ControllerBlockEntity extends BlockEntity {
         }
     }
 
+    private int landingWindowMask() { return window && windowSide != 2 ? windowMask : 0; }
+
+    /** 초 단위 설정 (0.1초 단위, 범위 밖이면 0 = 자동) */
+    private static float sec(float v, int delta, float auto) {
+        float cur = v > 0 ? v : auto;
+        float n = Math.round((cur + delta * 0.1f) * 10f) / 10f;
+        if (n < 0.5f || n > 10f) return 0;
+        return n;
+    }
+
+    /** 새 고유번호 (기존 번호와 겹치지 않게) */
+    public String newSerial(ServerLevel lvl) {
+        SerialRegistry reg = SerialRegistry.get(lvl);
+        for (int i = 0; i < 200; i++) {
+            String s = String.format("%04d-%03d", lvl.random.nextInt(10000), lvl.random.nextInt(1000));
+            if (!reg.taken(lvl, s, worldPosition)) return s;
+        }
+        return Long.toHexString(lvl.random.nextLong()).substring(0, 8);
+    }
+
     /** 설정 변경 후 문 모양 갱신 */
     private void refreshDoors(ServerLevel lvl) {
         for (Floor f : floors) for (Floor.Door d : f.doors) for (BlockPos c : d.cells) {
-            if (lvl.getBlockEntity(c) instanceof LandingDoorBlockEntity be) be.style(doorType, theme, window, jamb, rightHand(), effW(d.w), effH(d.h));
+            if (lvl.getBlockEntity(c) instanceof LandingDoorBlockEntity be) be.style(doorType, theme, landingWindowMask(), jamb, rightHand(), effW(d.w), effH(d.h), designMode == Spec.DesignMode.CUSTOM ? customDesign : "");
         }
     }
 
@@ -1649,6 +1701,40 @@ public class ControllerBlockEntity extends BlockEntity {
             case "disp" -> carDisplay = cycle(Spec.Display.values(), carDisplay, delta);
             case "copkeys" -> copKeys = cycle(Spec.CopKeys.values(), copKeys, delta);
             case "ddbtn" -> ddCopButtons = !ddCopButtons;
+            case "winside" -> windowSide = Math.floorMod(windowSide + delta, 3);
+            case "winall" -> windowMask = -1;
+            case "winpanel" -> {
+                int n = Math.max(1, doorType.totalPanels());
+                int m = windowMask == -1 ? (1 << n) - 1 : windowMask;
+                m ^= 1 << Math.max(0, Math.min(15, text.isEmpty() ? 0 : Integer.parseInt(text)));
+                windowMask = m == (1 << n) - 1 ? -1 : m;
+                if (!window) window = true;
+            }
+            case "opensec" -> openSec = sec(openSec, delta, doorType.seconds);
+            case "closesec" -> closeSec = sec(closeSec, delta, doorType.seconds / 0.85f);
+            case "designmode" -> designMode = cycle(Spec.DesignMode.values(), designMode, delta);
+            case "customdesign" -> {
+                java.util.List<String> ids = CustomDesignIndex.ids();
+                if (!ids.isEmpty()) {
+                    int i = ids.indexOf(customDesign);
+                    customDesign = ids.get(Math.floorMod(i + delta, ids.size()));
+                    designMode = Spec.DesignMode.CUSTOM;
+                }
+            }
+            case "serial" -> {
+                String v = text.trim();
+                if (v.isEmpty()) v = newSerial(lvl);
+                if (!v.matches("[A-Za-z0-9가-힣_\\-#. ]{1,16}")) {
+                    p.displayClientMessage(Component.translatable("elevmod.msg.serial_invalid").withStyle(ChatFormatting.RED), true);
+                } else if (!v.equals(serial) && SerialRegistry.get(lvl).taken(lvl, v, worldPosition)) {
+                    p.displayClientMessage(Component.translatable("elevmod.msg.serial_taken", v).withStyle(ChatFormatting.RED), true);
+                } else {
+                    SerialRegistry.get(lvl).unregister(serial, worldPosition);
+                    serial = v;
+                    SerialRegistry.get(lvl).register(serial, worldPosition);
+                    p.displayClientMessage(Component.translatable("elevmod.msg.serial_set", v).withStyle(ChatFormatting.GREEN), true);
+                }
+            }
             case "return" -> returnSec = Math.floorMod(returnSec + delta * 15, 315);
             case "beep" -> beep = !beep;
             case "fourf" -> fourAsF = !fourAsF;
@@ -1839,6 +1925,10 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putInt("copStyle", copStyle.ordinal()); t.putInt("accStyle", accStyle.ordinal());
         t.putInt("carDisplay", carDisplay.ordinal()); t.putInt("copKeys", copKeys.ordinal());
         t.putBoolean("ddCopButtons", ddCopButtons);
+        t.putInt("windowMask", windowMask); t.putInt("windowSide", windowSide);
+        t.putFloat("openSec", openSec); t.putFloat("closeSec", closeSec);
+        t.putInt("designMode", designMode.ordinal()); t.putString("customDesign", customDesign);
+        t.putFloat("openAuto", doorType.seconds);
     }
 
     private void loadSettings(CompoundTag t) {
@@ -1886,6 +1976,11 @@ public class ControllerBlockEntity extends BlockEntity {
         carDisplay = en(Spec.Display.values(), t.getInt("carDisplay"));
         copKeys = en(Spec.CopKeys.values(), t.getInt("copKeys"));
         ddCopButtons = t.getBoolean("ddCopButtons");
+        windowMask = t.contains("windowMask") ? t.getInt("windowMask") : -1;
+        windowSide = t.getInt("windowSide");
+        openSec = t.getFloat("openSec"); closeSec = t.getFloat("closeSec");
+        designMode = en(Spec.DesignMode.values(), t.getInt("designMode"));
+        customDesign = t.getString("customDesign");
     }
 
     private static <E extends Enum<E>> E en(E[] vals, int i) { return vals[Math.max(0, Math.min(i, vals.length - 1))]; }
@@ -1896,6 +1991,7 @@ public class ControllerBlockEntity extends BlockEntity {
         CompoundTag set = new CompoundTag();
         saveSettings(set);
         t.put("settings", set);
+        t.putLong("origin", worldPosition.asLong());
         ListTag fl = new ListTag();
         for (Floor f : floors) fl.add(f.save());
         t.put("floors", fl);
@@ -1916,6 +2012,26 @@ public class ControllerBlockEntity extends BlockEntity {
         ListTag log = new ListTag();
         for (String l : faultLog) log.add(StringTag.valueOf(l));
         t.put("log", log);
+    }
+
+    /** 복사본: 문/장치/기계/군관리 좌표를 delta 만큼 이동하고, 원본의 카를 건드리지 않도록 카 ID 를 비운다 */
+    private void relocate(BlockPos delta) {
+        relocated = true;
+        serialChecked = false;
+        for (Floor f : floors) {
+            f.y += delta.getY();
+            for (Floor.Door d : f.doors) {
+                d.master = d.master.offset(delta);
+                for (int i = 0; i < d.cells.size(); i++) d.cells.set(i, d.cells.get(i).offset(delta));
+            }
+        }
+        java.util.List<BlockPos> tmp = new ArrayList<>(devices); devices.clear(); for (BlockPos p : tmp) devices.add(p.offset(delta));
+        tmp = new ArrayList<>(machines); machines.clear(); for (BlockPos p : tmp) machines.add(p.offset(delta));
+        tmp = new ArrayList<>(group); group.clear(); for (BlockPos p : tmp) group.add(p.offset(delta));
+        if (lobbyY != Integer.MIN_VALUE) lobbyY += delta.getY();
+        if (homeY != Integer.MIN_VALUE) homeY += delta.getY();
+        if (fireY != Integer.MIN_VALUE) fireY += delta.getY();
+        carIds.clear();
     }
 
     private static ListTag longs(java.util.Collection<BlockPos> c) {
@@ -1949,6 +2065,11 @@ public class ControllerBlockEntity extends BlockEntity {
         travelled = t.getDouble("dist");
         faultLog.clear();
         for (Tag x : t.getList("log", Tag.TAG_STRING)) faultLog.add(x.getAsString());
+        // 복사·붙여넣기 감지: 저장 당시 위치와 지금 위치가 다르면 연결된 좌표를 모두 같은 만큼 옮긴다
+        if (t.contains("origin")) {
+            BlockPos origin = BlockPos.of(t.getLong("origin"));
+            if (!origin.equals(worldPosition)) relocate(worldPosition.subtract(origin));
+        }
         rebuild();
         if (!floors.isEmpty()) {
             cur = Math.min(cur, floors.size() - 1);

@@ -19,6 +19,10 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
+import com.mchoe.elevmod.client.design.CustomDesign;
+import com.mchoe.elevmod.client.design.CustomDesigns;
+import com.mchoe.elevmod.client.design.Relief;
+
 import java.util.List;
 
 import static com.mchoe.elevmod.client.render.CarGeometry.T;
@@ -80,6 +84,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         c.disp = en(Spec.Display.values(), st.getInt("disp"));
         c.tenkey = st.getBoolean("tenkey");
         c.cbtn = !st.contains("cbtn") || st.getBoolean("cbtn");
+        c.cd = CustomDesigns.get(st.getString("dsg"));
         c.car = car;
 
         if (c.usage == Spec.Usage.WHEELCHAIR_LIFT) renderLift(c);
@@ -95,6 +100,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         Spec.Usage usage; Spec.Drive drive; Spec.DoorType dt; Spec.Theme theme; Spec.Ceiling ceiling;
         Spec.WallFinish wallF; Spec.FloorFinish floorF; Spec.ButtonStyle copSt, accSt; Spec.Display disp;
         boolean lights, emg, glass, right, tenkey, cbtn;
+        CustomDesign cd;
     }
 
     private String wallTex(Ctx c) {
@@ -142,7 +148,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         VertexConsumer kick = RenderUtil.solid(buf, "kick");
 
         // ---- 바닥 + 플랫폼
-        String floorTex = switch (c.floorF) {
+        String floorTex = c.cd != null && c.cd.floorTex != null ? c.cd.floorTex : switch (c.floorF) {
             case GRANITE -> "floor_granite";
             case MARBLE -> "floor_marble";
             case CHECKER -> "floor_checker";
@@ -196,7 +202,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
 
         // ---- 거울(후면 상부) + 핸드레일
         boolean passenger = c.usage.passengerCar() && !c.glass;
-        if (passenger && c.rw <= 0 && c.theme != Spec.Theme.MIRROR && c.wallF != Spec.WallFinish.MIRROR)
+        if (passenger && c.rw <= 0 && c.theme != Spec.Theme.MIRROR && c.wallF != Spec.WallFinish.MIRROR && (c.cd == null || c.cd.mirror))
             RenderUtil.panel(ps, RenderUtil.solid(buf, "mirror"), -w / 2 + 0.12f, 1.0f, -d / 2 + 0.014f, w / 2 - 0.12f, h - 0.14f, -d / 2 + 0.02f, c.il, WHITE);
         if (c.usage.passengerCar() || c.glass) handrails(c);
         if (freight && !mesh) bumpers(c);
@@ -205,7 +211,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         ceiling(c, mesh);
 
         // ---- 카 실(문턱)
-        VertexConsumer sill = RenderUtil.solid(buf, "sill");
+        VertexConsumer sill = RenderUtil.solid(buf, c.cd != null && c.cd.sillTex != null ? c.cd.sillTex : "sill");
         if (c.fw > 0 && !openFront) RenderUtil.box(ps, sill, c.fo - c.fw / 2 - 0.03f, -0.006f, d / 2 - T, c.fo + c.fw / 2 + 0.03f, 0.004f, d / 2 + 0.032f, c.il, WHITE);
         if (c.rw > 0) RenderUtil.box(ps, sill, c.ro - c.rw / 2 - 0.03f, -0.006f, -d / 2 - 0.032f, c.ro + c.rw / 2 + 0.03f, 0.004f, -d / 2 + T, c.il, WHITE);
 
@@ -226,11 +232,23 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
     /** 측벽(side=true, sx=±1) 또는 후면 벽의 판넬 분할 */
     private void wallPanels(Ctx c, VertexConsumer wall, boolean tiled, boolean side, int sx, float a, float b) {
         float len = b - a;
-        int n = Math.max(1, Math.round(len / 0.72f));
+        CustomDesign.Surface cw = c.cd != null ? c.cd.wall : null;
+        float pwid = c.cd != null && c.cd.panelWidth > 0 ? c.cd.panelWidth : 0.72f;
+        int n = Math.max(1, Math.round(len / pwid));
         float gap = 0.008f, seg = (len - gap * (n - 1)) / n;
         float y1 = 0.13f, y2 = c.h - 0.05f;
         for (int i = 0; i < n; i++) {
             float s1 = a + i * (seg + gap), s2 = s1 + seg;
+            if (cw != null) {
+                // 커스텀 디자인 벽 판넬: 안쪽에서 볼 때 왼쪽→오른쪽 좌표계
+                float inset = Math.max(0.012f, cw.maxRecess() + 0.002f);
+                Relief.Frame f;
+                if (side && sx > 0) f = new Relief.Frame(c.w / 2 - inset, y1, s1, 0, 0, 1, 0, 1, 0, -1, 0, 0);
+                else if (side) f = new Relief.Frame(-c.w / 2 + inset, y1, s2, 0, 0, -1, 0, 1, 0, 1, 0, 0);
+                else f = new Relief.Frame(s1, y1, -c.d / 2 + inset, 1, 0, 0, 0, 1, 0, 0, 0, 1);
+                Relief.draw(c.ps, c.buf, cw, f, s2 - s1, y2 - y1, c.il, null);
+                continue;
+            }
             if (side) {
                 float xi = sx * c.w / 2, xp = xi - sx * 0.012f;
                 if (tiled) RenderUtil.box(c.ps, wall, Math.min(xi, xp), y1, s1, Math.max(xi, xp), y2, s2, c.il, WHITE);
@@ -259,6 +277,19 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
                 || c.theme == Spec.Theme.GLASS || c.theme == Spec.Theme.CHECKER ? "panel_stainless" : "panel_" + c.theme.tex());
         if (dw <= 0) { RenderUtil.panel(c.ps, ret, -w / 2 - T, 0, z1, w / 2 + T, h, z2, c.il, WHITE); return; }
         float l = off - dw / 2, r = off + dw / 2;
+        CustomDesign.Surface fwS = c.cd != null ? (c.cd.frontWall != null ? c.cd.frontWall : null) : null;
+        if (fwS != null) {
+            // 리턴/트랜섬의 실내 쪽 면 (실내에서 정면을 볼 때 왼쪽→오른쪽 = -X 방향(정면) / +X 방향(후면))
+            float zin = dir > 0 ? z1 - fwS.maxRecess() - 0.0015f : z2 + fwS.maxRecess() + 0.0015f;
+            float[][] pieces = {{r, 0, w / 2 + T, h}, {-w / 2 - T, 0, l, h}, {l, dh, r, h}};
+            for (float[] q : pieces) {
+                if (q[2] - q[0] <= 0.01f || q[3] - q[1] <= 0.01f) continue;
+                CustomDesign.Surface srf = q[1] > 0 && c.cd.transom != null ? c.cd.transom : fwS;
+                Relief.Frame f = dir > 0 ? new Relief.Frame(q[2], q[1], zin, -1, 0, 0, 0, 1, 0, 0, 0, -1)
+                        : new Relief.Frame(q[0], q[1], zin, 1, 0, 0, 0, 1, 0, 0, 0, 1);
+                Relief.draw(c.ps, c.buf, srf, f, q[2] - q[0], q[3] - q[1], c.il, null);
+            }
+        }
         if (l > -w / 2 - T) RenderUtil.panel(c.ps, ret, -w / 2 - T, 0, z1, l, h, z2, c.il, WHITE);
         if (r < w / 2 + T) RenderUtil.panel(c.ps, ret, r, 0, z1, w / 2 + T, h, z2, c.il, WHITE);
         if (dh < h) RenderUtil.panel(c.ps, ret, l, dh, z1, r, h, z2, c.il, WHITE);
@@ -278,7 +309,10 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         for (float[] r : rects) layers = Math.max(layers, (int) r[4] + 1);
         boolean mirror = c.right && type.sideOpening();
         float plane = rear ? -c.d / 2 : c.d / 2;
-        for (float[] r : rects) {
+        int[] rank = DoorLayout.rank(type, W, H, mirror);
+        int wm = c.st.getBoolean("win") ? (c.st.contains("winm") ? c.st.getInt("winm") : -1) : 0;
+        for (int ri = 0; ri < rects.size(); ri++) {
+            float[] r = rects.get(ri);
             float a1 = mirror ? W - r[1] : r[0], a2 = mirror ? W - r[0] : r[1];
             float lead = mirror ? -r[6] : r[6];
             // 문 좌표 → 카 x (후면 문은 축이 반대)
@@ -289,9 +323,30 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
             float z1 = rear ? plane - k - 0.006f : plane + k;
             float z2 = rear ? plane - k : plane + k + 0.006f;
             if (r[5] == 1) { RenderUtil.fill(c.ps, c.buf, x1, r[2], z1, x2, r[3], z2, c.il, 0xFF6E7378); continue; }
-            float[] win = glass ? null : RenderUtil.windowRect(c.st.getBoolean("win"), x1, x2, r[2], r[3]);
-            if (win == null) RenderUtil.panel(c.ps, vc, x1, r[2], z1, x2, r[3], z2, c.il, WHITE);
-            else RenderUtil.panelWindow(c.ps, c.buf, vc, x1, r[2], z1, x2, r[3], z2, win[0], win[1], win[2], win[3], c.il, WHITE);
+            float[] win = glass ? null : RenderUtil.windowRect(DoorLayout.hasWindow(wm, rank[ri]), x1, x2, r[2], r[3]);
+            CustomDesign.Surface ds = c.cd != null ? c.cd.door : null;
+            RenderUtil.doorPanel(c.ps, c.buf, vc, x1, r[2], z1, x2, r[3], z2, win, ds == null || !rear, ds == null || rear, c.il, WHITE);
+            if (ds != null) {
+                // 카 안쪽 면: 실내에서 볼 때 왼쪽→오른쪽 좌표계. 오목한 부분이 보이도록 깊이만큼 실내 쪽으로 띄움
+                float off = ds.maxRecess() + 0.0005f;
+                float pw = x2 - x1, ph = r[3] - r[2];
+                float[] lw = null;
+                Relief.Frame f;
+                if (!rear) {
+                    f = new Relief.Frame(x2, r[2], z1 - off, -1, 0, 0, 0, 1, 0, 0, 0, -1);
+                    if (win != null) lw = new float[]{x2 - win[2], win[1] - r[2], x2 - win[0], win[3] - r[2]};
+                } else {
+                    f = new Relief.Frame(x1, r[2], z2 + off, 1, 0, 0, 0, 1, 0, 0, 0, 1);
+                    if (win != null) lw = new float[]{win[0] - x1, win[1] - r[2], win[2] - x1, win[3] - r[2]};
+                }
+                Relief.draw(c.ps, c.buf, ds, f, pw, ph, c.il, lw);
+                // 띄운 만큼 문짝 옆면을 막음
+                if (off > 0.002f) {
+                    float za = rear ? z2 : z1 - off, zb = rear ? z2 + off : z1;
+                    RenderUtil.fill(c.ps, c.buf, x1, r[2], za, x1 + 0.001f, r[3], zb, c.il, 0xFF8A8E92);
+                    RenderUtil.fill(c.ps, c.buf, x2 - 0.001f, r[2], za, x2, r[3], zb, c.il, 0xFF8A8E92);
+                }
+            }
             // 세이프티 슈 / 멀티빔(검은 띠) – 앞날 안쪽 면
             if (lead != 0 && H > 1.2f) {
                 float ex = lead > 0 ? x2 - 0.018f : x1, ex2 = lead > 0 ? x2 : x1 + 0.018f;
@@ -304,6 +359,21 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
     private void handrails(Ctx c) {
         float y = 0.9f, r = 0.018f;
         int col = 0xFFD8DCE0;
+        if (c.cd != null && c.cd.handrail != null) {
+            CustomDesign.Rail hr = c.cd.handrail;
+            if (hr.shape.equals("none")) return;
+            y = hr.y; r = hr.r; col = hr.color;
+            if (hr.shape.equals("flat")) {
+                float t = r * 0.5f;
+                float z1 = -c.d / 2 + 0.18f, z2 = c.d / 2 - T - 0.28f;
+                if (hr.sides) for (int sx = -1; sx <= 1; sx += 2) {
+                    float x = sx * (c.w / 2 - 0.05f);
+                    if (z2 > z1) RenderUtil.fill(c.ps, c.buf, x - t, y - r, z1, x + t, y + r, z2, c.il, col);
+                }
+                if (hr.back && c.rw <= 0) RenderUtil.fill(c.ps, c.buf, -c.w / 2 + 0.18f, y - r, -c.d / 2 + 0.05f - t, c.w / 2 - 0.18f, y + r, -c.d / 2 + 0.05f + t, c.il, col);
+                return;
+            }
+        }
         float z1 = -c.d / 2 + 0.18f, z2 = c.d / 2 - T - 0.28f;
         for (int sx = -1; sx <= 1; sx += 2) {
             float x = sx * (c.w / 2 - 0.055f);
@@ -339,7 +409,15 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         int glow = c.lights ? RenderUtil.FULL : c.il;
         int lightCol = c.lights ? 0xFFFFFFFF : 0xFF707070;
         // 카 상부 외피
-        RenderUtil.box(ps, RenderUtil.solid(buf, "steel"), -w / 2 - T, h, -d / 2 - T, w / 2 + T, h + 0.05f, d / 2, c.light, WHITE);
+        CustomDesign.Surface cs = c.cd != null && !mesh ? c.cd.ceiling : null;
+        float topY = h + (cs != null ? cs.maxRecess() + 0.01f : 0);
+        RenderUtil.box(ps, RenderUtil.solid(buf, "steel"), -w / 2 - T, topY, -d / 2 - T, w / 2 + T, topY + 0.05f, d / 2, c.light, WHITE);
+        if (cs != null) {
+            // 커스텀 천장: 아래를 향하는 면, 안쪽에서 올려다볼 때 뒤→앞이 화면 위쪽
+            Relief.draw(ps, buf, cs, new Relief.Frame(-w / 2, h - 0.004f, -d / 2, 1, 0, 0, 0, 0, 1, 0, -1, 0), w, d - T, c.lights ? c.il : c.il, null);
+            RenderUtil.fill(ps, buf, w / 2 - 0.22f, h - 0.016f, -d / 2 + 0.05f, w / 2 - 0.06f, h - 0.004f, -d / 2 + 0.11f, c.emg ? RenderUtil.FULL : c.il, c.emg ? 0xFFFFE070 : 0xFFE8E8E0);
+            return;
+        }
         if (mesh || c.usage == Spec.Usage.DUMBWAITER) {
             RenderUtil.quadY(ps, RenderUtil.solid(buf, "ceiling_panel"), -w / 2, -d / 2, w / 2, d / 2 - T, h - 0.001f, true, c.il, 0xFFC0C0C0);
             return;
@@ -408,6 +486,11 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
                 ps.translate(face, 0, (b[2] + b[5]) / 2);
                 ps.mulPose(Axis.YP.rotationDegrees(cop.wall() > 0 ? -90 : 90));
                 pw = b[5] - b[2];
+            }
+            if (c.cd != null && c.cd.cop != null) {
+                float off = c.cd.cop.maxRecess() + 0.0015f;
+                Relief.draw(ps, c.buf, c.cd.cop, new Relief.Frame(-pw / 2, b[1], off, 1, 0, 0, 0, 1, 0, 0, 0, 1), pw, b[4] - b[1], c.il, null);
+                ps.translate(0, 0, off + 0.0005f);
             }
             copFace(c, pw, b[1], b[4]);
             ps.popPose();

@@ -26,7 +26,11 @@ public class LandingDoorBlockEntity extends BlockEntity {
     public boolean master = true;
     public int col, row, w = 1, h = 1;
     public int doorType = 0, theme = 0;
-    public boolean window, rightHand;
+    public boolean rightHand;
+    /** 방범창 문짝 비트(순번), 0 = 없음, -1 = 전체 */
+    public int winMask;
+    /** 커스텀 디자인 id (빈 문자열 = 기본 디자인) */
+    public String design = "";
     public int jamb = 0;
     public float clearW = 0.9f, clearH = 0.95f;
     public float target, speed = 0.025f;
@@ -74,10 +78,10 @@ public class LandingDoorBlockEntity extends BlockEntity {
         sync();
     }
 
-    public void style(Spec.DoorType t, Spec.Theme th, boolean win, Spec.Jamb jb, boolean right, float cw, float chh) {
-        if (doorType == t.ordinal() && theme == th.ordinal() && window == win && jamb == jb.ordinal() && rightHand == right
-                && clearW == cw && clearH == chh) return;
-        doorType = t.ordinal(); theme = th.ordinal(); window = win; jamb = jb.ordinal(); rightHand = right; clearW = cw; clearH = chh;
+    public void style(Spec.DoorType t, Spec.Theme th, int win, Spec.Jamb jb, boolean right, float cw, float chh, String dsg) {
+        if (doorType == t.ordinal() && theme == th.ordinal() && winMask == win && jamb == jb.ordinal() && rightHand == right
+                && clearW == cw && clearH == chh && design.equals(dsg)) return;
+        doorType = t.ordinal(); theme = th.ordinal(); winMask = win; jamb = jb.ordinal(); rightHand = right; clearW = cw; clearH = chh; design = dsg;
         sync();
     }
 
@@ -156,11 +160,12 @@ public class LandingDoorBlockEntity extends BlockEntity {
         if (ctrl != null) t.putLong("ctrl", ctrl.asLong());
         t.putBoolean("master", master);
         t.putInt("col", col); t.putInt("row", row); t.putInt("w", w); t.putInt("h", h);
-        t.putInt("type", doorType); t.putInt("theme", theme); t.putBoolean("win", window);
+        t.putInt("type", doorType); t.putInt("theme", theme); t.putInt("winm", winMask); t.putString("dsg", design);
         t.putInt("jamb", jamb); t.putBoolean("rh", rightHand); t.putFloat("cw", clearW); t.putFloat("ch", clearH);
         t.putFloat("target", target); t.putFloat("speed", speed);
         t.putInt("finish", finish); t.putInt("jambO", jambOverride);
         t.putBoolean("manual", manual);
+        t.putLong("origin", worldPosition.asLong());
     }
 
     @Override
@@ -170,7 +175,7 @@ public class LandingDoorBlockEntity extends BlockEntity {
         master = !t.contains("master") || t.getBoolean("master");
         col = t.getInt("col"); row = t.getInt("row");
         w = Math.max(1, t.getInt("w")); h = Math.max(1, t.getInt("h"));
-        doorType = t.getInt("type"); theme = t.getInt("theme"); window = t.getBoolean("win");
+        doorType = t.getInt("type"); theme = t.getInt("theme"); winMask = t.contains("winm") ? t.getInt("winm") : (t.getBoolean("win") ? -1 : 0); design = t.getString("dsg");
         jamb = t.getInt("jamb"); rightHand = t.getBoolean("rh");
         clearW = t.contains("cw") ? t.getFloat("cw") : Math.max(0.6f, w - 0.1f);
         clearH = t.contains("ch") ? t.getFloat("ch") : h - 0.05f;
@@ -178,7 +183,21 @@ public class LandingDoorBlockEntity extends BlockEntity {
         speed = t.contains("speed") ? t.getFloat("speed") : 0.025f;
         finish = t.contains("finish") ? t.getInt("finish") : -1;
         manual = t.getBoolean("manual");
+        // 복사·붙여넣기 되면 연결된 제어반 좌표도 같이 옮긴다 (복사본끼리 연결 유지)
+        if (t.contains("origin") && ctrl != null) {
+            BlockPos o = BlockPos.of(t.getLong("origin"));
+            if (!o.equals(worldPosition)) { ctrl = ctrl.offset(worldPosition.subtract(o)); moved = true; }
+        }
         jambOverride = t.contains("jambO") ? t.getInt("jambO") : -1;
+    }
+
+    /** 복사로 좌표가 옮겨졌으면 새 좌표가 저장되도록 표시 */
+    private boolean moved;
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (moved && level != null && !level.isClientSide) { moved = false; setChanged(); }
     }
 
     @Override

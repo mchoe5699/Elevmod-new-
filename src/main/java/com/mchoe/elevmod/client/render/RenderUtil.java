@@ -102,25 +102,35 @@ public final class RenderUtil {
         v(vc, m, n, x2, y2, z2, 0, 0, 1, 0, 0, light, c); v(vc, m, n, x2, y1, z2, 0, 1, 1, 0, 0, light, c);
     }
 
-    /**
-     * 방범창(투명 유리창)이 뚫린 문짝: 텍스처를 한 장으로 늘여 붙인 상자에서 (wx1,wy1)-(wx2,wy2) 구멍을 뺀 모양.
-     * 구멍 안쪽 면(창틀)과 고무 개스킷, 투명 유리까지 그린다.
-     */
+    /** 방범창이 뚫린 문짝 (모든 면) */
     public static void panelWindow(PoseStack ps, MultiBufferSource buf, VertexConsumer vc, float x1, float y1, float z1, float x2, float y2, float z2,
                                    float wx1, float wy1, float wx2, float wy2, int light, int c) {
+        doorPanel(ps, buf, vc, x1, y1, z1, x2, y2, z2, new float[]{wx1, wy1, wx2, wy2}, true, true, light, c);
+    }
+
+    /**
+     * 문짝 상자: 텍스처를 면마다 한 장으로 늘여 붙임. win != null 이면 방범창 구멍 + 고무 개스킷 + 투명 유리.
+     * drawPZ / drawNZ = +Z / -Z 면을 그릴지 (커스텀 디자인이 그 면을 대신 그릴 때 false).
+     */
+    public static void doorPanel(PoseStack ps, MultiBufferSource buf, VertexConsumer vc, float x1, float y1, float z1, float x2, float y2, float z2,
+                                 @org.jetbrains.annotations.Nullable float[] win, boolean drawPZ, boolean drawNZ, int light, int c) {
         Matrix4f m = ps.last().pose();
         Matrix3f n = ps.last().normal();
         float W = x2 - x1, H = y2 - y1;
-        // 앞(+Z)·뒤(-Z) 면: 창 둘레 4조각
-        float[][] parts = {{x1, y1, x2, wy1}, {x1, wy2, x2, y2}, {x1, wy1, wx1, wy2}, {wx2, wy1, x2, wy2}};
+        float[][] parts = win == null ? new float[][]{{x1, y1, x2, y2}}
+                : new float[][]{{x1, y1, x2, win[1]}, {x1, win[3], x2, y2}, {x1, win[1], win[0], win[3]}, {win[2], win[1], x2, win[3]}};
         for (float[] q : parts) {
             if (q[2] - q[0] <= 0 || q[3] - q[1] <= 0) continue;
             float ua = (q[0] - x1) / W, ub = (q[2] - x1) / W, va = (y2 - q[1]) / H, vb = (y2 - q[3]) / H;
-            v(vc, m, n, q[0], q[1], z2, ua, va, 0, 0, 1, light, c); v(vc, m, n, q[2], q[1], z2, ub, va, 0, 0, 1, light, c);
-            v(vc, m, n, q[2], q[3], z2, ub, vb, 0, 0, 1, light, c); v(vc, m, n, q[0], q[3], z2, ua, vb, 0, 0, 1, light, c);
-            float ra = (x2 - q[0]) / W, rb = (x2 - q[2]) / W;
-            v(vc, m, n, q[0], q[1], z1, ra, va, 0, 0, -1, light, c); v(vc, m, n, q[0], q[3], z1, ra, vb, 0, 0, -1, light, c);
-            v(vc, m, n, q[2], q[3], z1, rb, vb, 0, 0, -1, light, c); v(vc, m, n, q[2], q[1], z1, rb, va, 0, 0, -1, light, c);
+            if (drawPZ) {
+                v(vc, m, n, q[0], q[1], z2, ua, va, 0, 0, 1, light, c); v(vc, m, n, q[2], q[1], z2, ub, va, 0, 0, 1, light, c);
+                v(vc, m, n, q[2], q[3], z2, ub, vb, 0, 0, 1, light, c); v(vc, m, n, q[0], q[3], z2, ua, vb, 0, 0, 1, light, c);
+            }
+            if (drawNZ) {
+                float ra = (x2 - q[0]) / W, rb = (x2 - q[2]) / W;
+                v(vc, m, n, q[0], q[1], z1, ra, va, 0, 0, -1, light, c); v(vc, m, n, q[0], q[3], z1, ra, vb, 0, 0, -1, light, c);
+                v(vc, m, n, q[2], q[3], z1, rb, vb, 0, 0, -1, light, c); v(vc, m, n, q[2], q[1], z1, rb, va, 0, 0, -1, light, c);
+            }
         }
         // 바깥 테두리 면 (위/아래/좌/우)
         v(vc, m, n, x1, y2, z1, 0, 0, 0, 1, 0, light, c); v(vc, m, n, x1, y2, z2, 0, 1, 0, 1, 0, light, c);
@@ -131,6 +141,8 @@ public final class RenderUtil {
         v(vc, m, n, x1, y2, z2, 1, 0, -1, 0, 0, light, c); v(vc, m, n, x1, y2, z1, 0, 0, -1, 0, 0, light, c);
         v(vc, m, n, x2, y1, z1, 1, 1, 1, 0, 0, light, c); v(vc, m, n, x2, y2, z1, 1, 0, 1, 0, 0, light, c);
         v(vc, m, n, x2, y2, z2, 0, 0, 1, 0, 0, light, c); v(vc, m, n, x2, y1, z2, 0, 1, 1, 0, 0, light, c);
+        if (win == null) return;
+        float wx1 = win[0], wy1 = win[1], wx2 = win[2], wy2 = win[3];
         // 창틀(구멍 안쪽 면) – 어두운 고무 개스킷 색
         int g = 0xFF1E2024;
         fill(ps, buf, wx1 - 0.008f, wy1 - 0.008f, z1 - 0.0015f, wx2 + 0.008f, wy1, z2 + 0.0015f, light, g);

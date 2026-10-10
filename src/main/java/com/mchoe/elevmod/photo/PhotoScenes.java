@@ -197,6 +197,29 @@ public final class PhotoScenes {
         SHOTS.add(new Shot("61_window_car_closed", x + 1.0, Y0, -wn.cd + 0.3, 0, 6, wn.getBlockPos(), 0f, 0));
         SHOTS.add(new Shot("62_window_close", x + 0.75, Y0 - 0.1, 1.9, 180, 0, wn.getBlockPos(), 0f, 0));
 
+        // ---- J: 방범창 선택 – 4짝 중앙개폐 중 바깥 두 짝(1번, 4번)만
+        x += 10;
+        ControllerBlockEntity wm = elevator(l, p, x, 0, 2, 4, 2, 2, false, cc -> {
+            cc.usage = Spec.Usage.PASSENGER_FREIGHT; cc.capIdx = 9; cc.doorType = Spec.DoorType.CO4; cc.window = true; cc.windowMask = 0b1001;
+        });
+        SHOTS.add(new Shot("63_window_select_hall", x + 1.0, Y0, 4.2, 180, 6, wm.getBlockPos(), 0f, 0));
+        // ---- K: 커스텀 디자인 예시 2종
+        x += 10;
+        ControllerBlockEntity cw1 = elevator(l, p, x, 0, 2, 4, 1, 2, false, cc -> {
+            cc.usage = Spec.Usage.PASSENGER; cc.capIdx = 7; cc.designMode = Spec.DesignMode.CUSTOM; cc.customDesign = "classic_wood"; cc.window = true;
+        });
+        SHOTS.add(new Shot("70_classic_front", x + 0.5, Y0, -cw1.cd + 0.28, 0, 8, cw1.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("71_classic_side", x + 0.5, Y0, -cw1.cd / 2, -90, 10, cw1.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("72_classic_ceiling", x + 0.5, Y0, -cw1.cd / 2, 0, -75, cw1.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("73_classic_hall", x + 0.5, Y0, 3.4, 180, 6, cw1.getBlockPos(), 0f, 0));
+        x += 10;
+        ControllerBlockEntity cw2 = elevator(l, p, x, 0, 2, 4, 1, 2, false, cc -> {
+            cc.usage = Spec.Usage.PASSENGER; cc.capIdx = 7; cc.designMode = Spec.DesignMode.CUSTOM; cc.customDesign = "modern_line";
+        });
+        SHOTS.add(new Shot("74_modern_front", x + 0.5, Y0, -cw2.cd + 0.28, 0, 8, cw2.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("75_modern_side", x + 0.5, Y0, -cw2.cd / 2, 90, 10, cw2.getBlockPos(), 0f, 0));
+        SHOTS.add(new Shot("76_modern_ceiling", x + 0.5, Y0, -cw2.cd / 2, 0, -75, cw2.getBlockPos(), 0f, 0));
+
         // ---- H: 승강장 장치 의장 진열 (디자인 변경기로 바꿀 수 있는 것들)
         for (int xx = -22; xx <= 0; xx++) for (int y = Y0; y <= Y0 + 3; y++) set(l, xx, y, 32, Blocks.SMOOTH_QUARTZ.defaultBlockState());
         for (int xx = -24; xx <= 2; xx++) for (int z = 33; z <= 39; z++) set(l, xx, Y0 - 1, z, Blocks.POLISHED_ANDESITE.defaultBlockState());

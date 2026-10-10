@@ -74,6 +74,15 @@ public final class Spec {
         DoorType(float seconds, int panels, boolean center) { this.seconds = seconds; this.panels = panels; this.center = center; }
         public String key() { return "elevmod.door." + name().toLowerCase(Locale.ROOT); }
         public boolean sideOpening() { return !center && this != UP && this != SWING && this != GATE; }
+        /** 출입구 하나의 전체 문짝 수 (방범창 선택용) */
+        public int totalPanels() {
+            return switch (this) {
+                case CO, CO4, CO6 -> panels * 2;
+                case BIPART, UP -> 2;
+                case GATE -> 0;
+                default -> panels;
+            };
+        }
     }
 
     /** 승강장 출입구 틀(쟘) */
@@ -122,6 +131,12 @@ public final class Spec {
     public enum FloorFinish {
         AUTO, GRANITE, MARBLE, CHECKER, RUBBER, WOOD;
         public String key() { return "elevmod.floor." + name().toLowerCase(Locale.ROOT); }
+    }
+
+    /** 디자인 모드: 기본 디자인(모드에 내장된 모든 의장) / 커스텀 디자인(사진을 보고 만든 전용 디자인) */
+    public enum DesignMode {
+        BASIC, CUSTOM;
+        public String key() { return "elevmod.dmode." + name().toLowerCase(Locale.ROOT); }
     }
 
     /** 운전반 층 입력 방식: 층별 버튼 / 텐키(10-KEY, 숫자 조합 입력) */
