@@ -22,6 +22,7 @@ import net.minecraftforge.fml.common.Mod;
 /** CI 자동 촬영기: -Delevmod.photo=true 로 실행하면 월드를 만들고 촬영 후 종료한다. */
 @Mod.EventBusSubscriber(modid = ElevMod.MODID, value = Dist.CLIENT)
 public final class PhotoBooth {
+    private static volatile net.minecraft.nbt.CompoundTag indData;
     private PhotoBooth() {}
 
     private static final boolean ON = Boolean.getBoolean("elevmod.photo");
@@ -122,7 +123,23 @@ public final class PhotoBooth {
                 }
                 wait++;
                 if (wait == 60 && !SAMPLES.isEmpty()) Screenshot.grab(mc.gameDirectory, "90_studio.png", mc.getMainRenderTarget(), c -> ElevMod.LOG.info("[photo] " + c.getString()));
-                if (wait > 80) { ElevMod.LOG.info("[photo] done"); mc.stop(); }
+                // 표시기 설정 화면 / 도트 애니메이션 편집기
+                if (wait == 70 && server != null && PhotoScenes.indCtrl != null) server.execute(() -> {
+                    if (server.overworld().getBlockEntity(PhotoScenes.indCtrl) instanceof com.mchoe.elevmod.elevator.ControllerBlockEntity c) indData = c.screenTag();
+                });
+                String[] guiShots = {"91_ind_trans", "92_ind_shape", "93_ind_color", "94_ind_behavior", "95_anim_editor"};
+                int[] pages = {0, 1, 2, 4, -1};
+                for (int i = 0; i < guiShots.length; i++) {
+                    int at = 90 + i * 40;
+                    if (wait == at && indData != null) {
+                        mc.options.hideGui = false;
+                        var is = new com.mchoe.elevmod.client.screen.IndicatorScreen(PhotoScenes.indCtrl, null, indData);
+                        if (pages[i] >= 0) { is.page(pages[i]); mc.setScreen(is); }
+                        else mc.setScreen(new com.mchoe.elevmod.client.screen.DotAnimEditorScreen(is, "a_phototest01"));
+                    }
+                    if (wait == at + 30 && indData != null) Screenshot.grab(mc.gameDirectory, guiShots[i] + ".png", mc.getMainRenderTarget(), c -> ElevMod.LOG.info("[photo] " + c.getString()));
+                }
+                if (wait > 300) { ElevMod.LOG.info("[photo] done"); mc.stop(); }
             }
             default -> {}
         }

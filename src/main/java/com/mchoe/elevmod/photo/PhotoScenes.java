@@ -34,6 +34,8 @@ public final class PhotoScenes {
     public static volatile boolean ready;
     /** 디자인 스튜디오로 만든 사진 디자인 id (클라이언트가 올림) */
     public static volatile String photoDesign = "";
+    /** 표시기 설정 화면 촬영용 제어반 */
+    public static volatile BlockPos indCtrl;
     static final int Y0 = -60;
 
     private static void set(ServerLevel l, int x, int y, int z, BlockState s) { l.setBlock(new BlockPos(x, y, z), s, 3); }
@@ -247,6 +249,8 @@ public final class PhotoScenes {
             cc.carDisplay = Spec.Display.DOT; cc.indOffX = 25; cc.indOffY = 4;
             cc.ind.dotCols = 5; cc.ind.dotRows = 12; cc.ind.dotOn = 0xFF40FF60;
         });
+        indCtrl = sw.getBlockPos();
+        sw.ind.trans = 1; sw.ind.arrowMode = 1; sw.ind.arrowSec = 3; sw.doorDelay = 1.5f; sw.hallCancel = true;
         SHOTS.add(new Shot("64_s2_window_hall", x + 1.0, Y0, 4.2, 180, 6, sw.getBlockPos(), 0f, 0));
         SHOTS.add(new Shot("65_s2_window_car", x + 1.0, Y0, -sw.cd + 0.3, 0, 6, sw.getBlockPos(), 0f, 0));
         SHOTS.add(new Shot("66_s2_window_half_hall", x + 1.0, Y0, 4.2, 180, 6, sw.getBlockPos(), 0.4f, 0));

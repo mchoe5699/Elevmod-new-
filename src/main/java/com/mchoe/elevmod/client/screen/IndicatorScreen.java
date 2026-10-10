@@ -57,6 +57,8 @@ public class IndicatorScreen extends Screen {
         if (focused != null && boxes.containsKey(focused)) { setFocused(boxes.get(focused)); boxes.get(focused).setFocused(true); }
     }
 
+    public void page(int p) { page = p; }
+
     private IndicatorProfile prof() { return IndicatorProfile.load(data.getCompound("ind")); }
 
     private void edit(String key, int delta, String text) { Net.CH.sendToServer(new Net.EditMsg(pos, key, delta, text)); }
@@ -177,7 +179,10 @@ public class IndicatorScreen extends Screen {
     }
 
     @Override
-    public void onClose() { minecraft.setScreen(parent); }
+    public void onClose() {
+        if (parent instanceof ControllerScreen cs) cs.update(data);
+        minecraft.setScreen(parent);
+    }
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
