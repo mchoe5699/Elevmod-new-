@@ -27,9 +27,27 @@ public final class RenderUtil {
         return TEX.computeIfAbsent(name, n -> new ResourceLocation(ElevMod.MODID, "textures/entity/" + n + ".png"));
     }
 
-    public static VertexConsumer solid(MultiBufferSource buf, String tex) { return buf.getBuffer(RenderType.entityCutoutNoCull(tex(tex))); }
+    /**
+     * MultiBufferSource 는 고정 버퍼가 아닌 렌더타입끼리 하나의 BufferBuilder 를 공유하므로,
+     * 다른 텍스처를 요청하면 이전에 받은 VertexConsumer 가 엉뚱한 텍스처로 그려진다.
+     * 그래서 정점마다 해당 렌더타입 버퍼를 다시 가져오는 지연(lazy) 소비자를 돌려준다.
+     */
+    private record Lazy(MultiBufferSource buf, RenderType rt) implements VertexConsumer {
+        private VertexConsumer t() { return buf.getBuffer(rt); }
+        @Override public VertexConsumer vertex(double x, double y, double z) { return t().vertex(x, y, z); }
+        @Override public VertexConsumer color(int r, int g, int b, int a) { return t().color(r, g, b, a); }
+        @Override public VertexConsumer uv(float u, float v) { return t().uv(u, v); }
+        @Override public VertexConsumer overlayCoords(int u, int v) { return t().overlayCoords(u, v); }
+        @Override public VertexConsumer uv2(int u, int v) { return t().uv2(u, v); }
+        @Override public VertexConsumer normal(float x, float y, float z) { return t().normal(x, y, z); }
+        @Override public void endVertex() { t().endVertex(); }
+        @Override public void defaultColor(int r, int g, int b, int a) { t().defaultColor(r, g, b, a); }
+        @Override public void unsetDefaultColor() { t().unsetDefaultColor(); }
+    }
 
-    public static VertexConsumer glass(MultiBufferSource buf, String tex) { return buf.getBuffer(RenderType.entityTranslucent(tex(tex))); }
+    public static VertexConsumer solid(MultiBufferSource buf, String tex) { return new Lazy(buf, RenderType.entityCutoutNoCull(tex(tex))); }
+
+    public static VertexConsumer glass(MultiBufferSource buf, String tex) { return new Lazy(buf, RenderType.entityTranslucent(tex(tex))); }
 
     private static void v(VertexConsumer vc, Matrix4f m, Matrix3f n, float x, float y, float z, float u, float vv,
                           float nx, float ny, float nz, int light, int c) {
@@ -128,7 +146,7 @@ public final class RenderUtil {
         ps.popPose();
     }
 
-    public static VertexConsumer cut(MultiBufferSource buf, String tex) { return buf.getBuffer(RenderType.entityCutoutNoCull(tex(tex))); }
+    public static VertexConsumer cut(MultiBufferSource buf, String tex) { return new Lazy(buf, RenderType.entityCutoutNoCull(tex(tex))); }
 
     /** 단색 상자 (흰 텍스처에 색 입힘) */
     public static void fill(PoseStack ps, MultiBufferSource buf, float x1, float y1, float z1, float x2, float y2, float z2, int light, int argb) {

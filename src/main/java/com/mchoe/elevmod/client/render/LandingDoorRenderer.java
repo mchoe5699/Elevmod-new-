@@ -68,7 +68,7 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
         }
 
         // ---- 알루미늄 실(문턱): 승강로 면부터 홀 쪽까지
-        RenderUtil.box(ps, RenderUtil.solid(buf, "sill"), x1 - 0.03f, -0.004f, -0.5f, x2 + 0.03f, 0.006f, 0.53f, light, WHITE);
+        RenderUtil.box(ps, RenderUtil.solid(buf, "sill"), x1 - 0.03f, -0.004f, -0.5f, x2 + 0.03f, 0.004f, -0.3f, light, WHITE);
 
         // ---- 문짝
         boolean glass = th == Spec.Theme.GLASS;
