@@ -132,6 +132,7 @@ public final class PhotoScenes {
             boolean rh = (Boolean) t[5];
             ControllerBlockEntity c = elevator(l, p, x, 0, 2, 4, dw, 2, false, cc -> {
                 cc.usage = u; cc.doorType = dt; cc.capIdx = cap; cc.jamb = jb; cc.doorHand = rh ? Spec.Side.RIGHT : Spec.Side.LEFT;
+                if (dt.sideOpening()) { cc.window = true; cc.windowMask = 0b01; }   // 편개: 승강장/카 방범창 위치 비교
                 if (u == Spec.Usage.FREIGHT || u == Spec.Usage.CONSTRUCTION) cc.theme = Spec.Theme.CHECKER;
             });
             String n = dt.name().toLowerCase() + (rh ? "_right" : "");
@@ -298,6 +299,8 @@ public final class PhotoScenes {
             // 회전한 호출 버튼 (Ctrl + / -)
             device(l, p, a, ModRegistry.HALL_BUTTON.get(), -3, Y0 + 1, 45);
             if (l.getBlockEntity(new BlockPos(-3, Y0 + 1, 45)) instanceof DeviceBlockEntity de) de.setYaw(25);
+            for (int i = 0; i < show.length; i++)
+                SHOTS.add(new Shot("29_ind_" + i, -20 + i * 2 + 0.5, Y0 + 0.95, 46.25, 180, 0, ac, 0f, 0));
             SHOTS.add(new Shot("26_ind_seg_left", -16.5, Y0 + 1.3, 47.6, 180, 6, ac, 0f, 0));
             SHOTS.add(new Shot("27_ind_dot_right", -8.0, Y0 + 1.3, 47.6, 180, 6, ac, 0f, 0));
             SHOTS.add(new Shot("28_ind_wide", -10.0, Y0 + 0.8, 50.0, 180, 4, ac, 0f, 0));
