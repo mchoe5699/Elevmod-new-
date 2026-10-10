@@ -39,6 +39,8 @@ public final class Relief {
     }
 
     private static void quad(Ctx c, VertexConsumer vc, float[][] pts, float[][] uv, float[] n, int light, int col) {
+        // 발광 요소: 방향 음영 없이 최대 밝기 (위를 향한 법선이 가장 밝게 그려짐)
+        if (light == RenderUtil.FULL) n = new float[]{0, 1, 0};
         Matrix4f m = c.ps.last().pose();
         Matrix3f nm = c.ps.last().normal();
         for (int i = 0; i < 4; i++) {
