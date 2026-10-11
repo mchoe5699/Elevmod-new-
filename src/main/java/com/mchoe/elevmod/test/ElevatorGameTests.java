@@ -64,6 +64,28 @@ public class ElevatorGameTests {
                 .thenSucceed();
     }
 
+    /** 표시기 화살표: 호출이 있는 정차 = 그 방향, 목적층 없음 = 꺼짐, 설정 시 문 열린 동안 표시 */
+    @GameTest(template = "empty", timeoutTicks = 1200)
+    public static void indicatorArrowStates(GameTestHelper h) {
+        ControllerBlockEntity c = build(h, 4, 0);
+        ServerLevel lvl = h.getLevel();
+        Player p = h.makeMockPlayer();
+        h.startSequence()
+                .thenExecuteAfter(2, () -> c.hallCall(lvl, absY(h, 9), false, null))
+                .thenWaitUntil(() -> h.assertTrue(c.state == ControllerBlockEntity.State.MOVING && c.displayDir() == 1, "운행 중 상승 화살표"))
+                .thenWaitUntil(() -> h.assertTrue(doorsOpenAt(c, 2), "최상층 도착"))
+                .thenExecute(() -> h.assertTrue(c.displayDir() == -1, "하강 호출로 정차: 하강 화살표 (" + c.displayDir() + ")"))
+                .thenWaitUntil(() -> h.assertTrue(c.state == ControllerBlockEntity.State.IDLE && c.doorPos == 0, "문 닫힘"))
+                .thenExecute(() -> {
+                    h.assertTrue(c.displayDir() == 0, "목적층 없음: 화살표 꺼짐");
+                    c.ind.openArrow = true;
+                    c.registerCarCall(lvl, 0, p);
+                })
+                .thenWaitUntil(() -> h.assertTrue(doorsOpenAt(c, 0), "1층 도착"))
+                .thenExecute(() -> h.assertTrue(c.displayDir() == -1, "목적층 없이 문 열림 정차: 마지막 방향 표시 (" + c.displayDir() + ")"))
+                .thenSucceed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 800)
     public static void ropeBreakTripsSafetyGear(GameTestHelper h) {
         ControllerBlockEntity c = build(h, 4, 0);

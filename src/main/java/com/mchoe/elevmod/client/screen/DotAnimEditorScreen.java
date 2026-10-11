@@ -70,7 +70,27 @@ public class DotAnimEditorScreen extends Screen {
         return a;
     }
 
+    /** 새 도트 글꼴: 기본 글꼴을 본떠 0~9, A~Z, - 를 미리 채움 */
+    private static DotAnim freshFont() {
+        DotAnim a = new DotAnim();
+        a.id = newId();
+        a.name = I18n.get("elevmod.anim.new_font");
+        a.kind = "font";
+        for (int i = 0; i < DotAnim.CHARS.length(); i++) {
+            DotAnim.Frame f = new DotAnim.Frame(35);
+            String[] g = com.mchoe.elevmod.client.render.Glyphs.dotGlyph(DotAnim.CHARS.charAt(i));
+            for (int y = 0; y < 7; y++) for (int x = 0; x < 5; x++) if (g[y].charAt(x) == '#') f.dots[y * 5 + x] = 1;
+            a.frames.add(f);
+        }
+        return a;
+    }
+
+    /** frame = -1 이면 정지 장면 */
     private DotAnim.Frame cur() {
+        if (frame == -1 && !anim.isFont()) {
+            if (anim.stop == null) anim.stop = anim.frames.get(0).copy();
+            return anim.stop;
+        }
         frame = Math.max(0, Math.min(frame, anim.frames.size() - 1));
         return anim.frames.get(frame);
     }
@@ -88,6 +108,7 @@ public class DotAnimEditorScreen extends Screen {
 
     @Override
     protected void init() {
+        secBox = null;
         seenVersion = AnimLibrary.version;
         int l = left(), t = top();
         // ---- 목록
@@ -96,7 +117,7 @@ public class DotAnimEditorScreen extends Screen {
         for (int i = 0; i < Math.min(LIST_ROWS, all.size() - listTop); i++) {
             DotAnim a = all.get(listTop + i);
             boolean sel = a.id.equals(anim.id);
-            addRenderableWidget(Button.builder(Component.literal(a.name).withStyle(sel ? ChatFormatting.YELLOW : ChatFormatting.WHITE), b -> { anim = copy(a); frame = 0; dirty = false; rebuildWidgets(); })
+            addRenderableWidget(Button.builder(Component.literal((a.isFont() ? "[" + I18n.get("elevmod.anim.font_tag") + "] " : "") + a.name).withStyle(sel ? ChatFormatting.YELLOW : ChatFormatting.WHITE), b -> { anim = copy(a); frame = 0; dirty = false; rebuildWidgets(); })
                     .bounds(l, t + i * 20, 96, 19).build());
         }
         int ly = t + LIST_ROWS * 20 + 2;
@@ -106,10 +127,11 @@ public class DotAnimEditorScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("elevmod.anim.dup"), b -> {
             DotAnim c = copy(anim); c.id = newId(); c.name = anim.name + " 2"; anim = c; dirty = true; rebuildWidgets();
         }).bounds(l + 49, ly + 18, 47, 18).build());
+        addRenderableWidget(Button.builder(Component.translatable("elevmod.anim.new_font_btn"), b -> { anim = freshFont(); frame = 0; dirty = true; rebuildWidgets(); }).bounds(l, ly + 38, 96, 18).build());
         addRenderableWidget(Button.builder(Component.translatable("elevmod.anim.delete").withStyle(ChatFormatting.RED), b -> {
             if (AnimLibrary.get(anim.id) != null) Net.CH.sendToServer(new AnimNet.Delete(anim.id));
             anim = fresh(); frame = 0; rebuildWidgets();
-        }).bounds(l, ly + 38, 96, 18).build());
+        }).bounds(l, ly + 58, 96, 18).build());
 
         // ---- 오른쪽: 이름·크기·옵션
         int rx = gridX() + 190;
@@ -123,18 +145,28 @@ public class DotAnimEditorScreen extends Screen {
         sizeBox.setValue(anim.cols + "x" + anim.rows);
         addRenderableWidget(sizeBox);
         addRenderableWidget(Button.builder(Component.translatable("elevmod.set.apply"), b -> applySize()).bounds(rx + 74, t + 22, 56, 18).build());
-        addRenderableWidget(Button.builder(Component.translatable(anim.loop ? "elevmod.anim.loop" : "elevmod.anim.once"), b -> { anim.loop = !anim.loop; dirty = true; rebuildWidgets(); })
+        if (!anim.isFont()) addRenderableWidget(Button.builder(Component.translatable(anim.loop ? "elevmod.anim.loop" : "elevmod.anim.once"), b -> { anim.loop = !anim.loop; dirty = true; rebuildWidgets(); })
                 .bounds(rx, t + 44, 64, 18).build());
-        addRenderableWidget(Button.builder(Component.translatable(anim.full ? "elevmod.anim.full" : "elevmod.anim.arrow"), b -> { anim.full = !anim.full; dirty = true; rebuildWidgets(); })
+        if (!anim.isFont()) addRenderableWidget(Button.builder(Component.translatable(anim.full ? "elevmod.anim.full" : "elevmod.anim.arrow"), b -> { anim.full = !anim.full; dirty = true; rebuildWidgets(); })
                 .bounds(rx + 66, t + 44, 64, 18).build());
 
         // ---- 장면
         int fy = t + 104;
-        addRenderableWidget(Button.builder(Component.literal("◀"), b -> { frame = Math.max(0, frame - 1); rebuildWidgets(); }).bounds(rx, fy, 20, 18).build());
+        if (anim.isFont()) {
+            // 글자 고르기: 0~9, A~Z, -
+            for (int i = 0; i < DotAnim.CHARS.length(); i++) {
+                final int ci = i;
+                boolean sel = i == frame;
+                addRenderableWidget(Button.builder(Component.literal(String.valueOf(DotAnim.CHARS.charAt(i))).withStyle(sel ? ChatFormatting.YELLOW : ChatFormatting.WHITE),
+                        b -> { frame = ci; rebuildWidgets(); }).bounds(rx + (i % 10) * 13, fy + (i / 10) * 15, 13, 14).build());
+            }
+        } else {
+        addRenderableWidget(Button.builder(Component.literal("◀"), b -> { frame = Math.max(-1, frame - 1); rebuildWidgets(); }).bounds(rx, fy, 20, 18).build());
         addRenderableWidget(Button.builder(Component.literal("▶"), b -> { frame = Math.min(anim.frames.size() - 1, frame + 1); rebuildWidgets(); }).bounds(rx + 110, fy, 20, 18).build());
         secBox = new EditBox(font, rx, fy + 22, 60, 18, Component.literal("sec"));
         secBox.setMaxLength(6);
         secBox.setValue(String.valueOf(cur().sec));
+        secBox.visible = frame >= 0;
         addRenderableWidget(secBox);
         addRenderableWidget(Button.builder(Component.translatable("elevmod.set.apply"), b -> applySec()).bounds(rx + 66, fy + 22, 64, 18).build());
         addRenderableWidget(Button.builder(Component.translatable("elevmod.anim.f_add"), b -> {
@@ -157,6 +189,10 @@ public class DotAnimEditorScreen extends Screen {
             if (to < 0 || to >= anim.frames.size()) return;
             DotAnim.Frame f = anim.frames.remove(frame); anim.frames.add(to, f); frame = to; dirty = true; rebuildWidgets();
         }).bounds(rx + 66, fy + 66, 64, 18).build());
+        // 정지 장면: 정차 중인데 갈 방향이 있을 때(호출·목적층 있음) 보이는 한 장면
+        addRenderableWidget(Button.builder(Component.translatable(frame == -1 ? "elevmod.anim.stop_editing" : "elevmod.anim.stop_frame").withStyle(frame == -1 ? ChatFormatting.YELLOW : ChatFormatting.AQUA),
+                b -> { frame = frame == -1 ? 0 : -1; rebuildWidgets(); }).bounds(rx, fy + 88, 130, 18).build());
+        }
 
         // ---- 도구 (도트 칸 아래)
         int ty = gridY() + 156;
@@ -198,6 +234,7 @@ public class DotAnimEditorScreen extends Screen {
     }
 
     private void applySec() {
+        if (secBox == null || frame < 0) return;
         try {
             cur().sec = Math.max(0.02f, Math.min(60f, Float.parseFloat(secBox.getValue().trim().replace(",", "."))));
             dirty = true;
@@ -216,7 +253,7 @@ public class DotAnimEditorScreen extends Screen {
     }
 
     private void save() {
-        if (secBox.isFocused()) applySec();
+        if (secBox != null && secBox.isFocused()) applySec();
         if (anim.name.isBlank()) anim.name = anim.id;
         Net.CH.sendToServer(new AnimNet.Save(anim.toJson().toString()));
         dirty = false;
@@ -281,7 +318,7 @@ public class DotAnimEditorScreen extends Screen {
     @Override
     public boolean keyPressed(int key, int scan, int mods) {
         if (key == 257 || key == 335) {
-            if (secBox.isFocused()) { applySec(); return true; }
+            if (secBox != null && secBox.isFocused()) { applySec(); return true; }
             if (sizeBox.isFocused()) { applySize(); return true; }
         }
         return super.keyPressed(key, scan, mods);
@@ -331,14 +368,20 @@ public class DotAnimEditorScreen extends Screen {
             g.fill(x, y, x + 25, y + 15, anim.palette[i]);
         }
         g.drawString(font, I18n.get("elevmod.anim.palette_hint"), rx + 110, py + 4, 0xFF888888, false);
-        g.drawCenteredString(font, I18n.get("elevmod.anim.frame", frame + 1, anim.frames.size()), rx + 65, t + 109, 0xFFFFD040);
-        g.drawString(font, I18n.get("elevmod.anim.sec_label"), rx + 134, t + 131, 0xFFDDDDDD, false);
-        g.drawString(font, I18n.get("elevmod.anim.total", String.format("%.2f", anim.totalSec())), rx, t + 192, 0xFFAAAAAA, false);
-        if (dirty) g.drawString(font, I18n.get("elevmod.anim.unsaved"), rx, t + 202, 0xFFFF8060, false);
+        if (anim.isFont()) {
+            g.drawString(font, I18n.get("elevmod.anim.font_char", String.valueOf(DotAnim.CHARS.charAt(Math.max(0, Math.min(frame, DotAnim.CHARS.length() - 1))))), rx, t + 170, 0xFFFFD040, false);
+            g.drawString(font, I18n.get("elevmod.anim.font_hint"), rx, t + 182, 0xFF888888, false);
+        } else {
+            g.drawCenteredString(font, frame == -1 ? I18n.get("elevmod.anim.stop_frame") : I18n.get("elevmod.anim.frame", frame + 1, anim.frames.size()), rx + 65, t + 109, 0xFFFFD040);
+            if (frame >= 0) g.drawString(font, I18n.get("elevmod.anim.sec_label"), rx + 134, t + 131, 0xFFDDDDDD, false);
+            g.drawString(font, I18n.get("elevmod.anim.total", String.format("%.2f", anim.totalSec())), rx, t + 212, 0xFFAAAAAA, false);
+            g.drawString(font, I18n.get("elevmod.anim.down_hint"), gx, gy + 212, 0xFF888888, false);
+        }
+        if (dirty) g.drawString(font, I18n.get("elevmod.anim.unsaved"), rx, t + 222, 0xFFFF8060, false);
         g.drawString(font, I18n.get("elevmod.anim.paint_hint"), gx, gy + 200, 0xFF888888, false);
 
         // 작은 미리보기 (항상 재생)
-        DotAnim.Frame pf = anim.frameAt(time());
+        DotAnim.Frame pf = anim.isFont() ? cur() : anim.frameAt(time());
         if (pf != null) {
             int ps = Math.max(2, Math.min(50 / anim.cols, 60 / anim.rows)), ox = rx + 136, oy = t + 150;
             g.fill(ox - 2, oy - 2, ox + anim.cols * ps + 2, oy + anim.rows * ps + 2, 0xFF050505);

@@ -117,7 +117,7 @@ public class ControllerBlockEntity extends BlockEntity {
     /** 카 안 위치표시기(트랜섬) 위치 조정 (cm) */
     public float indOffX = 0, indOffY = 0;
     // 일시 상태
-    private int pendingOpen, arrivedTick = -10000, arrivedDir;
+    private int pendingOpen, arrivedTick = -10000, arrivedDir, arrivedFloor = -1;
     private final java.util.Map<String, int[]> pressCount = new java.util.HashMap<>();
 
     private CompoundTag indTagCache;
@@ -141,22 +141,41 @@ public class ControllerBlockEntity extends BlockEntity {
      */
     public int displayDir() {
         boolean mv = state == State.MOVING && target >= 0 && target < floorS.length;
-        int travel = mv ? (floorS[target] > s ? 1 : -1) : dir;
-        switch (ind.arrowMode) {
-            case 1 -> {
-                if (mv && !crawl && !parkRun) {
-                    double dist = Math.abs(floorS[target] - s), sp = Math.max(Math.abs(v), 0.02);
-                    double eta = dist / sp / 20.0;
-                    if (eta <= ind.arrowSec) return predictDir(target, travel);
-                }
-                return mv ? travel : dir;
+        if (mv) {
+            int travel = floorS[target] > s ? 1 : -1;
+            if (crawl || parkRun || ardRun) return travel;
+            double dist = Math.abs(floorS[target] - s), sp = Math.max(Math.abs(v), 0.02);
+            double eta = dist / sp / 20.0;
+            int next = predictDir(target, travel);
+            if (next == 0) {
+                // 도착 후 갈 곳이 없음: '도착 전' 이면 정한 시간 전에 화살표를 끔
+                if (ind.offMode == 1 && eta <= ind.offSec) return 0;
+                return travel;
             }
-            case 2 -> {
-                if (!mv && tick - arrivedTick < ind.arrowSec * 20) return arrivedDir;
-                return mv ? travel : dir;
-            }
-            default -> { return mv ? travel : dir; }
+            if (ind.arrowMode == 1 && eta <= ind.arrowSec) return next;
+            return travel;
         }
+        // 정차 중
+        int d = dir != 0 ? dir : demandDir();
+        if (d != 0) {
+            // '도착 후' 전환: 도착하고 정한 시간 동안은 오던 방향을 유지
+            if (ind.arrowMode == 2 && arrivedDir != 0 && d != arrivedDir && tick - arrivedTick < ind.arrowSec * 20) return arrivedDir;
+            return d;
+        }
+        // 목적층이 없음
+        if (arrivedDir != 0 && cur == arrivedFloor) {
+            if (ind.offMode == 2 && tick - arrivedTick < ind.offSec * 20) return arrivedDir;
+            if (ind.openArrow && (state == State.OPENING || state == State.OPEN) && doorPos > 0) return arrivedDir;
+        }
+        return 0;
+    }
+
+    /** 정차 중 다음에 갈 방향 (다른 층 호출·목적층이 있으면) */
+    private int demandDir() {
+        if (floorS.length == 0 || cur < 0 || cur >= floorS.length) return 0;
+        int t = chooseNext();
+        if (t < 0 || t == cur) return 0;
+        return floorS[t] > floorS[cur] ? 1 : -1;
     }
 
     /** 도착 후 갈 방향 예측 (arrive() 와 같은 규칙) */
@@ -653,6 +672,7 @@ public class ControllerBlockEntity extends BlockEntity {
     private void arrive(ServerLevel lvl) {
         arrivedDir = dir;
         arrivedTick = tick;
+        arrivedFloor = target;
         cur = target;
         target = -1;
         v = 0;
@@ -1187,7 +1207,7 @@ public class ControllerBlockEntity extends BlockEntity {
             }
             boolean here = fi >= 0 && fi == cur && doorsOpen;
             d.setIndTag(indTag());
-            d.applyDisplay(text, ddir, statusKey(), v != 0, here && dir > 0, here && dir < 0, here && dir == 0,
+            d.applyDisplay(text, ddir, statusKey(), state == State.MOVING, here && dir > 0, here && dir < 0, here && dir == 0,
                     up, down, hasUp, hasDown, String.valueOf(letter()), usage == Spec.Usage.DUMBWAITER, floors.get(Math.max(0, fi)).name, namesList());
         }
         float speed = (float) v;

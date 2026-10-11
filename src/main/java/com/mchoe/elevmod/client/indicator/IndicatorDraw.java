@@ -70,18 +70,22 @@ public final class IndicatorDraw {
         Glyphs.rect(ps, buf, x1, y1, x2, y2, z, RenderUtil.FULL, bg);
         float zz = z + 0.0004f;
         // 애니메이션 고르기
-        String animId = dir > 0 ? p.animUp : dir < 0 ? p.animDown : p.animIdle;
+        // 화살표 애니메이션은 '상승' 하나만 만들고, 하강은 180도 돌려서 거꾸로 움직이게 함
+        String animId = dir != 0 ? p.animUp : p.animIdle;
         DotAnim anim = AnimLibrary.get(animId);
+        if (anim != null && anim.isFont()) anim = null;
+        boolean rot = dir < 0;
+        boolean still = dir != 0 && !moving;   // 정차 중이지만 갈 방향이 있음 → 정지 장면
         float animT = st == null ? t : t - st.dirT;
         if (anim != null && anim.full) {
             // 표시기 전체를 덮는 애니메이션
-            drawAnim(ps, buf, anim, animT, x1 + w * 0.04f, y1 + h * 0.08f, x2 - w * 0.04f, y2 - h * 0.08f, zz, light, p.dotRound, kind.equals("dot") ? off : Glyphs.dim(on, 0.1f));
+            drawAnim(ps, buf, anim, animT, x1 + w * 0.04f, y1 + h * 0.08f, x2 - w * 0.04f, y2 - h * 0.08f, zz, light, p.dotRound, kind.equals("dot") ? off : Glyphs.dim(on, 0.1f), rot, still);
             return;
         }
         // 화살표 칸 / 숫자 칸
         float ax2 = x1 + w * 0.3f;
         float[] num = {ax2, y1 + h * 0.08f, x2 - w * 0.03f, y2 - h * 0.08f};
-        if (anim != null) drawAnim(ps, buf, anim, animT, x1 + w * 0.04f, y1 + h * 0.1f, ax2 - w * 0.02f, y2 - h * 0.1f, zz, light, p.dotRound, Glyphs.dim(anim.palette[0], 0.1f));
+        if (anim != null) drawAnim(ps, buf, anim, animT, x1 + w * 0.04f, y1 + h * 0.1f, ax2 - w * 0.02f, y2 - h * 0.1f, zz, light, p.dotRound, Glyphs.dim(anim.palette[0], 0.1f), rot, still);
         else builtinArrow(ps, buf, p, kind, x1, y1, ax2, y2, zz, light, on, off, dir, moving, t);
         // 층 숫자 (+ 전환 효과)
         float prog = st == null || p.trans == 0 ? 1f : Math.max(0, Math.min(1, (t - st.changeT) / Math.max(0.05f, p.transSec)));
@@ -152,7 +156,9 @@ public final class IndicatorDraw {
     private static void dotText(PoseStack ps, MultiBufferSource buf, IndicatorProfile p, String text, float[] r, float ox, float oy,
                                 @Nullable float[] clip, float z, int light, int on, int off) {
         if (text.isEmpty()) text = " ";
-        int cols = p.dotCols, rows = p.dotRows, n = text.length();
+        DotAnim font = AnimLibrary.get(p.dotFont);
+        if (font != null && !font.isFont()) font = null;
+        int cols = font != null ? font.cols : p.dotCols, rows = font != null ? font.rows : p.dotRows, n = text.length();
         int total = n * cols + (n - 1);
         float w = r[2] - r[0], h = r[3] - r[1];
         float pitch = Math.min(w / total, h / rows);
@@ -161,13 +167,24 @@ public final class IndicatorDraw {
         int sx = Math.round(ox * total), sy = Math.round(oy * rows);
         for (int i = 0; i < n; i++) {
             String[] g = Glyphs.dotGlyph(text.charAt(i));
+            DotAnim.Frame fg = font == null ? null : font.glyph(text.charAt(i));
+            if (fg != null) { boolean any = false; for (byte b : fg.dots) if (b != 0) { any = true; break; } if (!any) fg = null; }  // 안 그린 글자는 기본 글꼴
             for (int yy = 0; yy < rows; yy++) for (int xx = 0; xx < cols; xx++) {
-                int fx = xx * 5 / cols, fy = yy * 7 / rows;
-                boolean lit = g[fy].charAt(fx) == '#';
+                boolean lit;
+                int col = on;
+                if (fg != null) {
+                    // 사용자가 직접 찍은 도트 글꼴 (1번 색 = 표시기 색, 나머지 = 글꼴 팔레트)
+                    int v = font.get(fg, xx, yy);
+                    lit = v > 0;
+                    if (v > 1) col = font.palette[v - 1];
+                } else {
+                    int fx = xx * 5 / cols, fy = yy * 7 / rows;
+                    lit = g[fy].charAt(fx) == '#';
+                }
                 int gxi = i * (cols + 1) + xx + sx, gyi = yy - sy;
                 if (gxi < 0 || gxi >= total || gyi < 0 || gyi >= rows) continue;
                 float cx = gx + gxi * pitch + pitch / 2, cy = gy - gyi * pitch - pitch / 2;
-                dot(ps, buf, cx, cy, pitch * 0.4f, z, lit, light, on, off, p.dotRound, clip);
+                dot(ps, buf, cx, cy, pitch * 0.4f, z, lit, light, col, off, p.dotRound, clip);
             }
         }
     }
@@ -190,12 +207,18 @@ public final class IndicatorDraw {
 
     /** 도트 애니메이션 그리기 – 영역에 맞게 도트 크기 결정 */
     public static void drawAnim(PoseStack ps, MultiBufferSource buf, DotAnim a, float t, float x1, float y1, float x2, float y2, float z, int light, boolean round, int offColor) {
-        DotAnim.Frame f = a.frameAt(Math.max(0, t));
+        drawAnim(ps, buf, a, t, x1, y1, x2, y2, z, light, round, offColor, false, false);
+    }
+
+    /** rot = 180도 돌려 그림(하강), still = 정지 장면 */
+    public static void drawAnim(PoseStack ps, MultiBufferSource buf, DotAnim a, float t, float x1, float y1, float x2, float y2, float z, int light, boolean round, int offColor,
+                                boolean rot, boolean still) {
+        DotAnim.Frame f = still ? a.stopFrame() : a.frameAt(Math.max(0, t));
         if (f == null) return;
         float pitch = Math.min((x2 - x1) / a.cols, (y2 - y1) / a.rows);
         float gx = (x1 + x2) / 2 - a.cols * pitch / 2, gy = (y1 + y2) / 2 + a.rows * pitch / 2;
         for (int y = 0; y < a.rows; y++) for (int x = 0; x < a.cols; x++) {
-            int v = a.get(f, x, y);
+            int v = rot ? a.get(f, a.cols - 1 - x, a.rows - 1 - y) : a.get(f, x, y);
             dot(ps, buf, gx + x * pitch + pitch / 2, gy - y * pitch - pitch / 2, pitch * 0.4f, z, v > 0, light, v > 0 ? a.palette[v - 1] : 0, offColor, round, null);
         }
     }

@@ -21,6 +21,22 @@ public final class DotAnim {
     public boolean full = false;
     public int[] palette = {0xFFFF8A18, 0xFFFF2A10, 0xFF40FF60, 0xFF40A8FF, 0xFFFFFFFF, 0xFFFFE040, 0xFFFF40C0, 0xFF60FFFF};
     public final List<Frame> frames = new ArrayList<>();
+    /** "anim" = 애니메이션, "font" = 도트 글꼴(층 숫자·문자용, frames[i] = CHARS 의 i번째 글자) */
+    public String kind = "anim";
+    /** 정지 장면: 정차 중이지만 갈 방향이 있을 때(호출·목적층 있음) 보여 줄 한 장면. null = 첫 장면 */
+    public Frame stop;
+    /** 글꼴로 만들 수 있는 글자 */
+    public static final String CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-";
+
+    public boolean isFont() { return "font".equals(kind); }
+
+    /** 글꼴의 글자 그림 (없으면 null) */
+    public Frame glyph(char c) {
+        int i = CHARS.indexOf(Character.toUpperCase(c));
+        return i < 0 || i >= frames.size() ? null : frames.get(i);
+    }
+
+    public Frame stopFrame() { return stop != null ? stop : frames.isEmpty() ? null : frames.get(0); }
 
     public static final class Frame {
         public float sec = 0.15f;
@@ -52,6 +68,11 @@ public final class DotAnim {
             for (int y = 0; y < Math.min(rows, nr); y++) for (int x = 0; x < Math.min(cols, nc); x++) d[y * nc + x] = f.dots[y * cols + x];
             f.dots = d;
         }
+        if (stop != null) {
+            byte[] d = new byte[nc * nr];
+            for (int y = 0; y < Math.min(rows, nr); y++) for (int x = 0; x < Math.min(cols, nc); x++) d[y * nc + x] = stop.dots[y * cols + x];
+            stop.dots = d;
+        }
         cols = nc; rows = nr;
     }
 
@@ -76,6 +97,14 @@ public final class DotAnim {
             fr.add(j);
         }
         o.add("frames", fr);
+        o.addProperty("kind", kind);
+        if (stop != null) {
+            JsonObject j = new JsonObject();
+            StringBuilder sb = new StringBuilder();
+            for (byte b : stop.dots) sb.append((char) ('0' + b));
+            j.addProperty("d", sb.toString());
+            o.add("stop", j);
+        }
         return o;
     }
 
@@ -100,6 +129,13 @@ public final class DotAnim {
             for (int i = 0; i < Math.min(d.length(), f.dots.length); i++) f.dots[i] = (byte) Math.max(0, Math.min(8, d.charAt(i) - '0'));
             a.frames.add(f);
         }
+        a.kind = o.has("kind") && "font".equals(o.get("kind").getAsString()) ? "font" : "anim";
+        if (o.has("stop")) {
+            String d = o.getAsJsonObject("stop").has("d") ? o.getAsJsonObject("stop").get("d").getAsString() : "";
+            a.stop = new Frame(a.cols * a.rows);
+            for (int i = 0; i < Math.min(d.length(), a.stop.dots.length); i++) a.stop.dots[i] = (byte) Math.max(0, Math.min(8, d.charAt(i) - '0'));
+        }
+        if (a.isFont()) while (a.frames.size() < CHARS.length()) a.frames.add(new Frame(a.cols * a.rows));
         if (a.frames.isEmpty()) a.frames.add(new Frame(a.cols * a.rows));
         return a;
     }

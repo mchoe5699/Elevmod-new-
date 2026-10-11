@@ -15,6 +15,13 @@ public final class IndicatorProfile {
     // ---------------------------------------------------------------- 화살표 전환 시점 (0 도착 시, 1 도착 전, 2 도착 후)
     public int arrowMode = 0;
     public float arrowSec = 2f;
+    // ---------------------------------------------------------------- 목적층이 없을 때 화살표 꺼지는 시점 (0 도착 시, 1 도착 전, 2 도착 후)
+    public int offMode = 0;
+    public float offSec = 2f;
+    /** 목적층이 없어도 문이 열린 채 정차해 있는 동안 (마지막 운행 방향) 화살표 표시 */
+    public boolean openArrow = false;
+    /** 도트 글꼴 (라이브러리 id, "" = 기본 글꼴) */
+    public String dotFont = "";
     // ---------------------------------------------------------------- 도트매트릭스
     public int dotCols = 5, dotRows = 7;
     public boolean dotRound = true;
@@ -33,6 +40,7 @@ public final class IndicatorProfile {
         CompoundTag t = new CompoundTag();
         t.putInt("tr", trans); t.putInt("td", transDir); t.putFloat("ts", transSec);
         t.putInt("am", arrowMode); t.putFloat("as", arrowSec);
+        t.putInt("om", offMode); t.putFloat("os", offSec); t.putBoolean("oa", openArrow); t.putString("df", dotFont);
         t.putInt("dc", dotCols); t.putInt("dr", dotRows); t.putBoolean("dro", dotRound);
         t.putInt("don", dotOn); t.putInt("doff", dotOff); t.putInt("dbg", dotBg);
         t.putInt("st", segType); t.putInt("ss", segShape); t.putFloat("sl", segSlant); t.putFloat("sth", segThick); t.putBoolean("s1", segLead1);
@@ -47,6 +55,7 @@ public final class IndicatorProfile {
         if (t == null || t.isEmpty()) return p;
         p.trans = t.getInt("tr"); p.transDir = t.getInt("td"); p.transSec = t.contains("ts") ? t.getFloat("ts") : 0.4f;
         p.arrowMode = t.getInt("am"); p.arrowSec = t.contains("as") ? t.getFloat("as") : 2f;
+        p.offMode = t.getInt("om"); p.offSec = t.contains("os") ? t.getFloat("os") : 2f; p.openArrow = t.getBoolean("oa"); p.dotFont = t.getString("df");
         p.dotCols = t.contains("dc") ? clamp(t.getInt("dc"), 3, 16) : 5; p.dotRows = t.contains("dr") ? clamp(t.getInt("dr"), 5, 24) : 7;
         p.dotRound = !t.contains("dro") || t.getBoolean("dro");
         p.dotOn = t.getInt("don"); p.dotOff = t.getInt("doff"); p.dotBg = t.getInt("dbg");
@@ -69,6 +78,10 @@ public final class IndicatorProfile {
             case "transsec" -> transSec = num(text, transSec, 0f, 5f);
             case "arrowmode" -> arrowMode = Math.floorMod(arrowMode + delta, 3);
             case "arrowsec" -> arrowSec = num(text, arrowSec, 0f, 30f);
+            case "offmode" -> offMode = Math.floorMod(offMode + delta, 3);
+            case "offsec" -> offSec = num(text, offSec, 0f, 30f);
+            case "openarrow" -> openArrow = !openArrow;
+            case "dotfont" -> dotFont = text;
             case "dotsize" -> {
                 String[] s = text.toLowerCase().replace("×", "x").replace("*", "x").split("x");
                 if (s.length == 2) {

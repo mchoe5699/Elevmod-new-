@@ -86,11 +86,16 @@ public class IndicatorScreen extends Screen {
                 y = typed(y, "ind.transsec", "elevmod.ind.transsec", f1(p.transSec), "elevmod.unit.sec");
                 y = cycle(y, "ind.arrowmode", "elevmod.ind.arrowmode", Component.translatable("elevmod.arrowmode." + p.arrowMode));
                 if (p.arrowMode != 0) y = typed(y, "ind.arrowsec", "elevmod.ind.arrowsec", f1(p.arrowSec), "elevmod.unit.sec");
+                // 목적층이 없을 때 화살표가 꺼지는 시점
+                y = cycle(y, "ind.offmode", "elevmod.ind.offmode", Component.translatable("elevmod.arrowmode." + p.offMode));
+                if (p.offMode != 0) y = typed(y, "ind.offsec", "elevmod.ind.offsec", f1(p.offSec), "elevmod.unit.sec");
+                y = cycle(y, "ind.openarrow", "elevmod.ind.openarrow", Component.translatable(p.openArrow ? "elevmod.on" : "elevmod.off"));
                 labels.add(new Label(I18n.get("elevmod.ind.arrow_hint"), left, y + 6));
             }
             case 1 -> {
                 y = typed(y, "ind.dotsize", "elevmod.ind.dotsize", p.dotCols + "x" + p.dotRows, null);
                 y = cycle(y, "ind.dotround", "elevmod.ind.dotround", Component.translatable(p.dotRound ? "elevmod.dot.round" : "elevmod.dot.square"));
+                y = fontRow(y, p.dotFont);
                 y = cycle(y, "ind.segtype", "elevmod.ind.segtype", Component.translatable("elevmod.segtype." + p.segType));
                 y = cycle(y, "ind.segshape", "elevmod.ind.segshape", Component.translatable("elevmod.segshape." + p.segShape));
                 y = typed(y, "ind.segslant", "elevmod.ind.segslant", f1(p.segSlant), "elevmod.unit.deg");
@@ -113,7 +118,8 @@ public class IndicatorScreen extends Screen {
             }
             case 3 -> {
                 y = anim(y, "ind.animUp", "elevmod.ind.animUp", p.animUp);
-                y = anim(y, "ind.animDown", "elevmod.ind.animDown", p.animDown);
+                labels.add(new Label(I18n.get("elevmod.ind.anim_down_note"), left() + 4, y + 2));
+                y += 14;
                 y = anim(y, "ind.animIdle", "elevmod.ind.animIdle", p.animIdle);
                 addRenderableWidget(Button.builder(Component.translatable("elevmod.anim.open_editor").withStyle(ChatFormatting.AQUA), b -> minecraft.setScreen(new DotAnimEditorScreen(this, null)))
                         .bounds(left, y + 4, 200, 20).build());
@@ -154,6 +160,23 @@ public class IndicatorScreen extends Screen {
         return y + 22;
     }
 
+    /** 도트 글꼴 고르기 (기본 → 저장한 글꼴들) */
+    private int fontRow(int y, String cur) {
+        labels.add(new Label(I18n.get("elevmod.ind.dotfont"), left(), y + 6));
+        DotAnim a = AnimLibrary.get(cur);
+        Component v = a == null || !a.isFont() ? Component.translatable("elevmod.font.builtin") : Component.literal(a.name).withStyle(ChatFormatting.AQUA);
+        addRenderableWidget(Button.builder(v, b -> {
+            List<String> ids = new ArrayList<>();
+            ids.add("");
+            for (DotAnim x : AnimLibrary.all()) if (x.isFont()) ids.add(x.id);
+            int i = Math.max(0, ids.indexOf(cur));
+            i = Math.floorMod(i + (Screen.hasShiftDown() ? -1 : 1), ids.size());
+            edit("ind.dotfont", 0, ids.get(i));
+        }).bounds(left() + 110, y, 100, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("elevmod.font.edit"), b -> minecraft.setScreen(new DotAnimEditorScreen(this, a != null && a.isFont() ? a.id : null))).bounds(left() + 212, y, 44, 20).build());
+        return y + 22;
+    }
+
     private int anim(int y, String key, String label, String cur) {
         labels.add(new Label(I18n.get(label), left(), y + 6));
         DotAnim a = AnimLibrary.get(cur);
@@ -162,7 +185,7 @@ public class IndicatorScreen extends Screen {
             // 기본 화살표 → 라이브러리 애니메이션들 순서로 돌기
             List<String> ids = new ArrayList<>();
             ids.add("");
-            for (DotAnim x : AnimLibrary.all()) ids.add(x.id);
+            for (DotAnim x : AnimLibrary.all()) if (!x.isFont()) ids.add(x.id);
             int i = Math.max(0, ids.indexOf(cur));
             i = Math.floorMod(i + (Screen.hasShiftDown() ? -1 : 1), ids.size());
             edit(key, 0, ids.get(i));
