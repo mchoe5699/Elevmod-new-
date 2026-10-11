@@ -58,7 +58,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         double vx = Mth.lerp(pt, car.xOld, car.getX()), vy = Mth.lerp(pt, car.yOld, car.getY()), vz = Mth.lerp(pt, car.zOld, car.getZ());
         ps.pushPose();
         ps.translate(rp.x - vx, rp.y - vy, rp.z - vz);
-        ps.mulPose(Axis.YP.rotationDegrees(-car.facing().toYRot()));
+        ps.mulPose(Axis.YP.rotationDegrees(-car.facing().toYRot() - car.groupYaw()));   // 회전기로 묶어 돌린 각도 포함
 
         Ctx c = new Ctx();
         c.ps = ps; c.buf = buf; c.st = st; c.light = light;

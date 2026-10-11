@@ -257,6 +257,15 @@ public final class PhotoScenes {
         SHOTS.add(new Shot("67_s2_window_half_car", x + 1.0, Y0, -sw.cd + 0.3, 0, 6, sw.getBlockPos(), 0.4f, 0));
         SHOTS.add(new Shot("68_s2_transom_offset", x + 1.0, Y0 + 0.2, -1.0, 0, -28, sw.getBlockPos(), 0f, 0));
 
+        // ---- O: 회전기로 묶어 30° 돌린 엘리베이터 (승강장 문·장치·제어반·기계·카)
+        x += 10;
+        ControllerBlockEntity rt = elevator(l, p, x, 0, 2, 4, 1, 2, false, cc -> { cc.usage = Spec.Usage.PASSENGER; cc.capIdx = 6; });
+        device(l, p, rt, ModRegistry.HALL_BUTTON.get(), x + 1, Y0 + 1, 1);
+        device(l, p, rt, ModRegistry.INDICATOR_SEGMENT.get(), x, Y0 + 2, 1);
+        com.mchoe.elevmod.network.GroupRotateMsg.apply(l, x - 2, Y0 - 3, -7, x + 2, Y0 + 20, 1, 30f, false);
+        SHOTS.add(new Shot("69_rotated_hall", x + 0.5, Y0, 4.5, 180, 10, rt.getBlockPos(), 0.5f, 0));
+        SHOTS.add(new Shot("69_rotated_top", x + 0.5, Y0 + 6, 3.5, 180, 50, rt.getBlockPos(), 0.5f, 0));
+
         // ---- N: 표시기 사용자 설정 진열 (세그먼트 종류·모양·색, 도트 크기, 애니메이션, 회전)
         {
             for (int xx = -22; xx <= 0; xx++) for (int y = Y0; y <= Y0 + 3; y++) set(l, xx, y, 44, Blocks.SMOOTH_QUARTZ.defaultBlockState());

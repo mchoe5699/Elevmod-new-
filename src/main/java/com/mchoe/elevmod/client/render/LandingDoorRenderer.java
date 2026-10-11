@@ -36,11 +36,12 @@ public class LandingDoorRenderer implements BlockEntityRenderer<LandingDoorBlock
     public void render(LandingDoorBlockEntity be, float pt, PoseStack ps, MultiBufferSource buf, int light, int overlay) {
         if (!be.master) return;
         ps.pushPose();
+        boolean grp = RenderUtil.groupRotate(ps, be.getBlockPos(), be.yaw, be.pivX, be.pivZ);
         ps.translate(0.5, 0, 0.5);
         ps.mulPose(Axis.YP.rotationDegrees(-be.facing().toYRot()));
         float p = progress(be, pt);
         int W = be.w, H = be.h;
-        if (be.yaw != 0) {
+        if (be.yaw != 0 && !grp) {
             // Ctrl + / - 회전: 출입구 전체 가운데를 축으로
             float cx = (W - 1) / 2f;
             ps.translate(cx, 0, 0);

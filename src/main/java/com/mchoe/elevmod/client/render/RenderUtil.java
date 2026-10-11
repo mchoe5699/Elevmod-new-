@@ -160,6 +160,16 @@ public final class RenderUtil {
     }
 
     /** 문짝 하나의 방범창 위치 (없으면 null). 문짝 중앙, 바닥에서 1.0~1.65m 의 세로로 긴 창 */
+    /** 회전기로 묶어 돌린 부품: 공통 회전축 (월드 x,z) 을 중심으로 돌림. 적용했으면 true */
+    public static boolean groupRotate(PoseStack ps, net.minecraft.core.BlockPos pos, float yaw, double pivX, double pivZ) {
+        if (yaw == 0 || Double.isNaN(pivX)) return false;
+        float px = (float) (pivX - pos.getX()), pz = (float) (pivZ - pos.getZ());
+        ps.translate(px, 0, pz);
+        ps.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-yaw));
+        ps.translate(-px, 0, -pz);
+        return true;
+    }
+
     public static float[] windowRect(boolean on, float x1, float x2, float y1, float y2) {
         if (!on || y2 - y1 < 1.5f || x2 - x1 < 0.22f) return null;
         float cx = (x1 + x2) / 2, hw = Math.min(0.065f, (x2 - x1) * 0.3f);

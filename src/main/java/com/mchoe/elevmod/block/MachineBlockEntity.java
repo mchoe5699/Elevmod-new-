@@ -50,12 +50,14 @@ public class MachineBlockEntity extends BlockEntity {
         t.putInt("drive", drive);
         t.putLong("origin", worldPosition.asLong());
         t.putFloat("yaw", yaw);
+        if (!Double.isNaN(pivX)) { t.putDouble("pvx", pivX); t.putDouble("pvz", pivZ); }
     }
 
     @Override
     public void load(CompoundTag t) {
         super.load(t);
         yaw = t.getFloat("yaw");
+        pivX = t.contains("pvx") ? t.getDouble("pvx") : Double.NaN; pivZ = t.contains("pvz") ? t.getDouble("pvz") : Double.NaN;
         ctrl = t.contains("ctrl") ? BlockPos.of(t.getLong("ctrl")) : null;
         speed = t.getFloat("speed");
         drive = t.getInt("drive");
@@ -67,6 +69,21 @@ public class MachineBlockEntity extends BlockEntity {
 
     /** Ctrl + / - 로 돌린 각도(도, 세로축) */
     public float yaw;
+    /** 회전기로 묶어 돌릴 때의 회전축 (월드 x, z). NaN = 블록 자체 가운데 */
+    public double pivX = Double.NaN, pivZ = Double.NaN;
+
+    @Override
+    public net.minecraft.world.phys.AABB getRenderBoundingBox() {
+        net.minecraft.world.phys.AABB b = new net.minecraft.world.phys.AABB(worldPosition).inflate(1);
+        if (yaw == 0 || Double.isNaN(pivX)) return b;
+        // 회전기로 돌리면 회전축에서 떨어진 만큼 그려지는 곳이 옮겨짐
+        double r = Math.hypot(worldPosition.getX() + 0.5 - pivX, worldPosition.getZ() + 0.5 - pivZ);
+        return b.inflate(r + 1);
+    }
+
+    /** 회전기: 묶음 회전 (yaw 0 + 축 NaN = 해제) */
+    public void setGroupRot(float y, double px, double pz) { pivX = px; pivZ = pz; setYaw(y); }
+
 
     public void setYaw(float y) {
         yaw = y;

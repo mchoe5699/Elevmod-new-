@@ -31,10 +31,11 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
         DeviceBlock.Kind k = db.kind;
         Direction f = d.getBlockState().getValue(DeviceBlock.FACING);
         ps.pushPose();
+        boolean grp = RenderUtil.groupRotate(ps, d.getBlockPos(), d.yaw, d.pivX, d.pivZ);
         ps.translate(0.5, 0, 0.5);
         ps.mulPose(Axis.YP.rotationDegrees(-f.toYRot()));
         ps.translate(d.offX / 16f, d.offY / 16f, 0);
-        if (d.yaw != 0) {
+        if (d.yaw != 0 && !grp) {
             // Ctrl + / - 회전: 판 뒷면 가운데를 축으로
             float pz = -0.5f + (float) k.depth / 32f;
             ps.translate(0, 0, pz);

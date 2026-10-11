@@ -191,6 +191,36 @@ public class ControllerBlockEntity extends BlockEntity {
 
     /** Ctrl + / - 로 돌린 각도(도) */
     public float yaw;
+    /** 회전기로 묶어 돌릴 때의 회전축 (월드 x, z). NaN = 블록 자체 가운데 */
+    public double pivX = Double.NaN, pivZ = Double.NaN;
+
+    @Override
+    public net.minecraft.world.phys.AABB getRenderBoundingBox() {
+        net.minecraft.world.phys.AABB b = new net.minecraft.world.phys.AABB(worldPosition).inflate(1);
+        if (yaw == 0 || Double.isNaN(pivX)) return b;
+        // 회전기로 돌리면 회전축에서 떨어진 만큼 그려지는 곳이 옮겨짐
+        double r = Math.hypot(worldPosition.getX() + 0.5 - pivX, worldPosition.getZ() + 0.5 - pivZ);
+        return b.inflate(r + 1);
+    }
+
+    /** 회전기: 묶음 회전 (yaw 0 + 축 NaN = 해제) */
+    public void setGroupRot(float y, double px, double pz) { pivX = px; pivZ = pz; setYaw(y); }
+
+    /** 카(와 승강로 속 부품) 회전: 회전기로 묶은 영역에 이 엘리베이터의 승강장 문이 있으면 같은 축·각도로 돌림 */
+    public float carYaw;
+    public double carPivX, carPivZ;
+
+    public void setCarRot(float y, double px, double pz) { carYaw = y; carPivX = px; carPivZ = pz; setChanged(); displayHash++; }
+
+    /** 카 위치를 회전 축 기준으로 돌림 */
+    private Vec3 rotCar(Vec3 p) {
+        if (carYaw == 0) return p;
+        Vec3 r = com.mchoe.elevmod.entity.ElevatorCarEntity.rot(new Vec3(p.x - carPivX, 0, p.z - carPivZ), carYaw);
+        return new Vec3(carPivX + r.x, p.y, carPivZ + r.z);
+    }
+
+    private Vec3 rotVec(Vec3 v) { return carYaw == 0 ? v : com.mchoe.elevmod.entity.ElevatorCarEntity.rot(v, carYaw); }
+
 
     public void setYaw(float y) {
         yaw = y;
@@ -1015,7 +1045,7 @@ public class ControllerBlockEntity extends BlockEntity {
             Vec3 p = paterPos(ps);
             Vec3 p2 = paterPos((ps + (run ? rated() : 0)) % paterLoop);
             ElevatorCarEntity car = car(lvl, i, p);
-            if (car != null) car.serverUpdate(this, p, run ? p2.subtract(p) : Vec3.ZERO, 0f, stateTag(i), i);
+            if (car != null) car.serverUpdate(this, rotCar(p), run ? rotVec(p2.subtract(p)) : Vec3.ZERO, 0f, stateTag(i), i);
         }
     }
 
@@ -1082,7 +1112,7 @@ public class ControllerBlockEntity extends BlockEntity {
         ElevatorCarEntity c = car(lvl, 0, p);
         if (c == null) return;
         Vec3 vel = v == 0 ? Vec3.ZERO : posAt(s + v).subtract(posAt(s));
-        c.serverUpdate(this, p, vel, doorPos, stateTag(-1), -1);
+        c.serverUpdate(this, rotCar(p), rotVec(vel), doorPos, stateTag(-1), -1);
     }
 
     public void removeCars(ServerLevel lvl) {
@@ -1102,6 +1132,7 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putInt("cur", floors.isEmpty() ? 0 : nearestIdx(s));
         t.putInt("dir", displayDir());
         t.putBoolean("mv", state == State.MOVING);
+        if (carYaw != 0) t.putFloat("gy", carYaw);
         t.putBoolean("dop", (state == State.OPENING || state == State.OPEN) && doorPos > 0);
         t.put("ind", indTag());
         t.putFloat("indx", indOffX); t.putFloat("indy", indOffY);
@@ -2207,6 +2238,8 @@ public class ControllerBlockEntity extends BlockEntity {
         t.put("settings", set);
         t.putLong("origin", worldPosition.asLong());
         t.putFloat("yaw", yaw);
+        t.putFloat("carYaw", carYaw); t.putDouble("carPivX", carPivX); t.putDouble("carPivZ", carPivZ);
+        if (!Double.isNaN(pivX)) { t.putDouble("pvx", pivX); t.putDouble("pvz", pivZ); }
         ListTag fl = new ListTag();
         for (Floor f : floors) fl.add(f.save());
         t.put("floors", fl);
@@ -2259,6 +2292,8 @@ public class ControllerBlockEntity extends BlockEntity {
     public void load(CompoundTag t) {
         super.load(t);
         yaw = t.getFloat("yaw");
+        carYaw = t.getFloat("carYaw"); carPivX = t.getDouble("carPivX"); carPivZ = t.getDouble("carPivZ");
+        pivX = t.contains("pvx") ? t.getDouble("pvx") : Double.NaN; pivZ = t.contains("pvz") ? t.getDouble("pvz") : Double.NaN;
         if (t.contains("settings")) loadSettings(t.getCompound("settings"));
         floors.clear();
         ListTag fl = t.getList("floors", Tag.TAG_COMPOUND);

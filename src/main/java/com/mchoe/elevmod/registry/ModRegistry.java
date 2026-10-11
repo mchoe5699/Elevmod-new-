@@ -81,6 +81,7 @@ public final class ModRegistry {
     public static final RegistryObject<Item> FIRE_KEY = ITEMS.register("fire_key", () -> new ElevItem(new Item.Properties().stacksTo(1), ElevItem.Type.FIRE_KEY));
     public static final RegistryObject<Item> OPERATOR_KEY = ITEMS.register("operator_key", () -> new ElevItem(new Item.Properties().stacksTo(1), ElevItem.Type.OPERATOR_KEY));
     public static final RegistryObject<Item> TESTER = ITEMS.register("tester", () -> new ElevItem(new Item.Properties().stacksTo(1), ElevItem.Type.TESTER));
+    public static final RegistryObject<Item> ROTATOR = ITEMS.register("rotator", () -> new com.mchoe.elevmod.item.RotatorItem(new Item.Properties().stacksTo(1)));
     public static final RegistryObject<Item> DESIGN_TOOL = ITEMS.register("design_tool", () -> new com.mchoe.elevmod.item.DesignToolItem(new Item.Properties().stacksTo(1)));
 
     // ---------------------------------------------------------------- 블록엔티티

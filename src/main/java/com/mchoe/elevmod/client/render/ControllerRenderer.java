@@ -19,7 +19,10 @@ public class ControllerRenderer implements BlockEntityRenderer<ControllerBlockEn
     public void render(ControllerBlockEntity be, float pt, PoseStack ps, MultiBufferSource buf, int light, int overlay) {
         BlockState st = be.getBlockState();
         if (!st.hasProperty(ControllerBlock.ROTATED) || !st.getValue(ControllerBlock.ROTATED)) return;
-        renderRotated(st.setValue(ControllerBlock.ROTATED, false), be.yaw, ps, buf, light, overlay);
+        ps.pushPose();
+        boolean grp = RenderUtil.groupRotate(ps, be.getBlockPos(), be.yaw, be.pivX, be.pivZ);
+        renderRotated(st.setValue(ControllerBlock.ROTATED, false), grp ? 0 : be.yaw, ps, buf, light, overlay);
+        ps.popPose();
     }
 
     static void renderRotated(BlockState st, float yaw, PoseStack ps, MultiBufferSource buf, int light, int overlay) {

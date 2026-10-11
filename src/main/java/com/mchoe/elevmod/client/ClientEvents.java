@@ -48,10 +48,12 @@ public final class ClientEvents {
             if (car.cPrev == null || car.cCur == null || car.isRemoved()) continue;
             if (car.isDumbwaiter()) {
                 if (car.contains(p, car.cCur)) {
-                    Vec3 F = new Vec3(car.facing().getStepX(), 0, car.facing().getStepZ());
-                    double depth = car.facing().getAxis() == net.minecraft.core.Direction.Axis.Z ? car.halfZ() : car.halfX();
-                    Vec3 out = car.cCur.add(F.scale(depth + 0.45));
-                    p.setPos(F.x != 0 ? out.x : p.getX(), p.getY(), F.z != 0 ? out.z : p.getZ());
+                    // 정면 방향으로 밀어냄 (회전 반영)
+                    Vec3 F = car.axisF(), L = car.axisL();
+                    Vec3 rel = p.position().subtract(car.cCur);
+                    double lx = rel.x * L.x + rel.z * L.z;
+                    Vec3 out = car.cCur.add(F.scale(car.carD() / 2.0 + 0.45)).add(L.scale(lx));
+                    p.setPos(out.x, p.getY(), out.z);
                 }
                 continue;
             }
@@ -59,7 +61,7 @@ public final class ClientEvents {
             Vec3 d = car.cCur.subtract(car.cPrev);
             double nx = p.getX() + d.x, ny = p.getY() + d.y, nz = p.getZ() + d.z;
             double floor = car.cCur.y;
-            boolean inside = Math.abs(nx - car.cCur.x) <= car.halfX() && Math.abs(nz - car.cCur.z) <= car.halfZ();
+            boolean inside = car.insideXZ(nx, nz, car.cCur, 0);
             if (inside && ny < floor) ny = floor;
             if (d.lengthSqr() > 0 || ny != p.getY()) p.setPos(nx, ny, nz);
             if (inside && p.getY() <= floor + 0.001) {
@@ -80,13 +82,14 @@ public final class ClientEvents {
         LocalPlayer p = mc.player;
         if (p == null) return;
         // 디자인 변경기 위치 조정 모드: 카 안 표시기(문 위)·운전반 표시창의 위치·크기 화면
-        if (p.getMainHandItem().getItem() instanceof com.mchoe.elevmod.item.DesignToolItem && com.mchoe.elevmod.item.DesignToolItem.positionMode(p.getMainHandItem())) {
+        // (다른 기능과 겹치지 않도록 Ctrl 을 누른 채 우클릭할 때만)
+        if (p.getMainHandItem().getItem() instanceof com.mchoe.elevmod.item.DesignToolItem && com.mchoe.elevmod.item.DesignToolItem.positionMode(p.getMainHandItem())
+                && net.minecraft.client.gui.screens.Screen.hasControlDown()) {
             for (ElevatorCarEntity car : CARS) {
                 if (car.cCur == null || !car.contains(p, car.cCur)) continue;
                 int target = -1;
                 if (CarGeometry.lookingAtCop(car, p.getEyePosition(1f), p.getViewVector(1f), car.cCur) != 0) target = 1;
                 else if (CarGeometry.pick(car, p.getEyePosition(1f), p.getViewVector(1f), car.cCur) == com.mchoe.elevmod.elevator.CarAction.PART_INDICATOR) target = 0;
-                if (target < 0 && p.isShiftKeyDown()) target = 0;   // 웅크리고 우클릭: 어디를 보든 배치 화면
                 if (target < 0) continue;
                 mc.setScreen(new com.mchoe.elevmod.client.screen.CarLayoutScreen(car, target));
                 e.setCanceled(true);
@@ -126,26 +129,4 @@ public final class ClientEvents {
         com.mchoe.elevmod.client.design.RemoteDesigns.clear();
     }
 
-    /**
-     * Ctrl + '+' / Ctrl + '-' : 보고 있는 엘리베이터 부품(승강장 장치, 승강장 문, 제어반, 기계)을 1°씩 회전.
-     * Ctrl + Shift 는 15°씩, Ctrl + 0 은 원래 각도로.
-     */
-    @SubscribeEvent
-    public static void key(InputEvent.Key e) {
-        if (e.getAction() == org.lwjgl.glfw.GLFW.GLFW_RELEASE) return;
-        if ((e.getModifiers() & org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL) == 0) return;
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.screen != null || mc.player == null || mc.level == null) return;
-        int k = e.getKey();
-        boolean plus = k == org.lwjgl.glfw.GLFW.GLFW_KEY_EQUAL || k == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ADD;
-        boolean minus = k == org.lwjgl.glfw.GLFW.GLFW_KEY_MINUS || k == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_SUBTRACT;
-        boolean zero = k == org.lwjgl.glfw.GLFW.GLFW_KEY_0 || k == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_0;
-        if (!plus && !minus && !zero) return;
-        if (!(mc.hitResult instanceof net.minecraft.world.phys.BlockHitResult bh) || bh.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) return;
-        var be = mc.level.getBlockEntity(bh.getBlockPos());
-        if (!(be instanceof com.mchoe.elevmod.block.DeviceBlockEntity || be instanceof com.mchoe.elevmod.block.LandingDoorBlockEntity
-                || be instanceof com.mchoe.elevmod.block.MachineBlockEntity || be instanceof com.mchoe.elevmod.elevator.ControllerBlockEntity)) return;
-        float step = (e.getModifiers() & org.lwjgl.glfw.GLFW.GLFW_MOD_SHIFT) != 0 ? 15f : 1f;
-        com.mchoe.elevmod.network.Net.CH.sendToServer(new com.mchoe.elevmod.network.RotateMsg(bh.getBlockPos(), plus ? step : -step, zero));
-    }
 }

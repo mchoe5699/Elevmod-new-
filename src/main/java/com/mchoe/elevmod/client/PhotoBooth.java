@@ -127,8 +127,8 @@ public final class PhotoBooth {
                 if (wait == 70 && server != null && PhotoScenes.indCtrl != null) server.execute(() -> {
                     if (server.overworld().getBlockEntity(PhotoScenes.indCtrl) instanceof com.mchoe.elevmod.elevator.ControllerBlockEntity c) indData = c.screenTag();
                 });
-                String[] guiShots = {"91_ind_trans", "92_ind_shape", "93_ind_color", "94_ind_behavior", "95_anim_editor", "96_ind_anim", "97_ind_carlayout", "98_ind_cells"};
-                int[] pages = {0, 1, 2, 4, -1, 3, 5, 6};
+                String[] guiShots = {"91_ind_trans", "92_ind_shape", "93_ind_color", "94_ind_behavior", "95_anim_editor", "96_ind_anim", "98_ind_cells"};
+                int[] pages = {0, 1, 2, 4, -1, 3, 5};
                 for (int i = 0; i < guiShots.length; i++) {
                     int at = 90 + i * 40;
                     if (wait == at && indData != null) {

@@ -42,7 +42,7 @@ public class ElevatorCarEntity extends Entity {
     private int sinceSync;
     private int checkTimer;
     /** 충돌 조각: 바닥, 천장, 뒷벽(3), 좌·우벽, 앞 좌·우 리턴, 트랜섬, 앞문, 뒷문 */
-    public static final int PARTS = 12;
+    public static final int PARTS = 128;
     private final CarPart[] parts = new CarPart[PARTS];
 
     public ElevatorCarEntity(EntityType<?> type, Level level) {
@@ -72,49 +72,75 @@ public class ElevatorCarEntity extends Entity {
         CompoundTag st = state();
         Vec3 o = position();
         float w = carW(), h = carH(), d = carD(), T = 0.06f;
-        int k = 0;
-        parts[k++].set(local(o, -w / 2, -0.15, -d / 2, w / 2, 0, d / 2));                 // 바닥
+        List<double[]> b = new java.util.ArrayList<>();
+        b.add(new double[]{-w / 2, -0.15, -d / 2, w / 2, 0, d / 2});                       // 바닥
         Spec.Usage u = usage();
         boolean walls = u != Spec.Usage.WHEELCHAIR_LIFT && u != Spec.Usage.DUMBWAITER;
-        if (!walls) { for (; k < PARTS; k++) parts[k].off(); return; }
-        float fw = st.getFloat("fw"), fh = st.getFloat("fh"), fo = st.getFloat("fo");
-        float rw = st.getFloat("rw"), rh = st.getFloat("rh"), ro = st.getFloat("ro");
-        float door = doorCur;
-        parts[k++].set(local(o, -w / 2, h, -d / 2, w / 2, h + 0.12, d / 2));                // 천장
-        // 뒷벽 (뒷문이 있으면 좌·우·위 3조각)
-        if (rw > 0) {
-            parts[k++].set(local(o, -w / 2, 0, -d / 2 - 0.04, ro - rw / 2, h, -d / 2 + T));
-            parts[k++].set(local(o, ro + rw / 2, 0, -d / 2 - 0.04, w / 2, h, -d / 2 + T));
-            parts[k++].set(local(o, ro - rw / 2, rh, -d / 2 - 0.04, ro + rw / 2, h, -d / 2 + T));
-        } else {
-            parts[k++].set(local(o, -w / 2, 0, -d / 2 - 0.04, w / 2, h, -d / 2 + T));
-            parts[k++].off(); parts[k++].off();
+        if (walls) {
+            float fw = st.getFloat("fw"), fh = st.getFloat("fh"), fo = st.getFloat("fo");
+            float rw = st.getFloat("rw"), rh = st.getFloat("rh"), ro = st.getFloat("ro");
+            float door = doorCur;
+            b.add(new double[]{-w / 2, h, -d / 2, w / 2, h + 0.12, d / 2});                  // 천장
+            // 뒷벽 (뒷문이 있으면 좌·우·위 3조각)
+            if (rw > 0) {
+                b.add(new double[]{-w / 2, 0, -d / 2 - 0.04, ro - rw / 2, h, -d / 2 + T});
+                b.add(new double[]{ro + rw / 2, 0, -d / 2 - 0.04, w / 2, h, -d / 2 + T});
+                b.add(new double[]{ro - rw / 2, rh, -d / 2 - 0.04, ro + rw / 2, h, -d / 2 + T});
+            } else b.add(new double[]{-w / 2, 0, -d / 2 - 0.04, w / 2, h, -d / 2 + T});
+            b.add(new double[]{w / 2 - T, 0, -d / 2, w / 2 + 0.04, h, d / 2});               // 왼쪽 벽 (+x)
+            b.add(new double[]{-w / 2 - 0.04, 0, -d / 2, -w / 2 + T, h, d / 2});             // 오른쪽 벽
+            if (fw > 0) {
+                b.add(new double[]{fo + fw / 2, 0, d / 2 - T, w / 2, h, d / 2 + 0.04});       // 앞 리턴
+                b.add(new double[]{-w / 2, 0, d / 2 - T, fo - fw / 2, h, d / 2 + 0.04});
+                b.add(new double[]{fo - fw / 2, fh, d / 2 - T, fo + fw / 2, h, d / 2 + 0.04}); // 트랜섬
+                // 앞문: 거의 다 열릴 때까지는 막음
+                if (door < 0.85f) b.add(new double[]{fo - fw / 2, 0, d / 2 - T, fo + fw / 2, fh, d / 2 + 0.04});
+            } else b.add(new double[]{-w / 2, 0, d / 2 - T, w / 2, h, d / 2 + 0.04});
+            float rd = st.getBoolean("ro2") ? door : 0;
+            if (rw > 0 && rd < 0.85f) b.add(new double[]{ro - rw / 2, 0, -d / 2 - 0.04, ro + rw / 2, rh, -d / 2 + T});
         }
-        parts[k++].set(local(o, w / 2 - T, 0, -d / 2, w / 2 + 0.04, h, d / 2));             // 왼쪽 벽 (+x)
-        parts[k++].set(local(o, -w / 2 - 0.04, 0, -d / 2, -w / 2 + T, h, d / 2));           // 오른쪽 벽
-        if (fw > 0) {
-            parts[k++].set(local(o, fo + fw / 2, 0, d / 2 - T, w / 2, h, d / 2 + 0.04));     // 앞 리턴
-            parts[k++].set(local(o, -w / 2, 0, d / 2 - T, fo - fw / 2, h, d / 2 + 0.04));
-            parts[k++].set(local(o, fo - fw / 2, fh, d / 2 - T, fo + fw / 2, h, d / 2 + 0.04)); // 트랜섬
-            // 앞문: 거의 다 열릴 때까지는 막음
-            if (door < 0.85f) parts[k++].set(local(o, fo - fw / 2, 0, d / 2 - T, fo + fw / 2, fh, d / 2 + 0.04));
-            else parts[k++].off();
-        } else {
-            parts[k++].set(local(o, -w / 2, 0, d / 2 - T, w / 2, h, d / 2 + 0.04));
-            parts[k++].off(); parts[k++].off(); parts[k++].off();
+        // 회전기로 비스듬히 돌린 카는 상자를 잘게 나눠 (축 정렬 상자로) 근사
+        float gy = groupYaw();
+        boolean aligned = Math.abs(gy - Math.round(gy / 90f) * 90f) < 0.01f;
+        int k = 0;
+        for (double[] q : b) {
+            int nx = aligned ? 1 : Math.max(1, (int) Math.ceil((q[3] - q[0]) / 0.3));
+            int nz = aligned ? 1 : Math.max(1, (int) Math.ceil((q[5] - q[2]) / 0.3));
+            for (int i = 0; i < nx; i++) for (int j = 0; j < nz; j++) {
+                if (k >= PARTS) break;
+                double x1 = q[0] + (q[3] - q[0]) * i / nx, x2 = q[0] + (q[3] - q[0]) * (i + 1) / nx;
+                double z1 = q[2] + (q[5] - q[2]) * j / nz, z2 = q[2] + (q[5] - q[2]) * (j + 1) / nz;
+                parts[k++].set(local(o, x1, q[1], z1, x2, q[4], z2));
+            }
         }
-        float rd = st.getBoolean("ro2") ? door : 0;
-        if (rw > 0 && rd < 0.85f) parts[k++].set(local(o, ro - rw / 2, 0, -d / 2 - 0.04, ro + rw / 2, rh, -d / 2 + T));
-        else parts[k++].off();
         for (; k < PARTS; k++) parts[k].off();
     }
 
-    /** 카 기준 상자 → 월드 상자 */
+    /** 회전기로 묶어 돌린 각도 (도, 위에서 볼 때 반시계) */
+    public float groupYaw() { return state().getFloat("gy"); }
+
+    /** 카 기준 축 (회전 반영): 왼쪽(반시계) 축 */
+    public Vec3 axisL() { Direction l = facing().getCounterClockWise(); return rot(new Vec3(l.getStepX(), 0, l.getStepZ()), groupYaw()); }
+
+    /** 카 기준 축 (회전 반영): 정면 축 */
+    public Vec3 axisF() { Direction f = facing(); return rot(new Vec3(f.getStepX(), 0, f.getStepZ()), groupYaw()); }
+
+    /** 수평 회전 (렌더러의 Axis.YP.rotationDegrees(-yaw) 와 같은 방향) */
+    public static Vec3 rot(Vec3 v, double yawDeg) {
+        if (yawDeg == 0) return v;
+        double r = Math.toRadians(yawDeg), c = Math.cos(r), s = Math.sin(r);
+        return new Vec3(v.x * c - v.z * s, v.y, v.x * s + v.z * c);
+    }
+
+    /** 카 기준 상자 → 월드 상자 (회전하면 네 모서리를 감싸는 상자) */
     private AABB local(Vec3 o, double x1, double y1, double z1, double x2, double y2, double z2) {
-        Direction f = facing(), l = f.getCounterClockWise();
-        double ax = o.x + l.getStepX() * x1 + f.getStepX() * z1, az = o.z + l.getStepZ() * x1 + f.getStepZ() * z1;
-        double bx = o.x + l.getStepX() * x2 + f.getStepX() * z2, bz = o.z + l.getStepZ() * x2 + f.getStepZ() * z2;
-        return new AABB(ax, o.y + y1, az, bx, o.y + y2, bz);
+        Vec3 L = axisL(), F = axisF();
+        double minX = Double.MAX_VALUE, minZ = Double.MAX_VALUE, maxX = -Double.MAX_VALUE, maxZ = -Double.MAX_VALUE;
+        for (double x : new double[]{x1, x2}) for (double z : new double[]{z1, z2}) {
+            double wx = o.x + L.x * x + F.x * z, wz = o.z + L.z * x + F.z * z;
+            minX = Math.min(minX, wx); maxX = Math.max(maxX, wx); minZ = Math.min(minZ, wz); maxZ = Math.max(maxZ, wz);
+        }
+        return new AABB(minX, o.y + y1, minZ, maxX, o.y + y2, maxZ);
     }
 
     @Override
@@ -153,8 +179,17 @@ public class ElevatorCarEntity extends Entity {
 
     public boolean isDumbwaiter() { return usage() == Spec.Usage.DUMBWAITER; }
 
-    public double halfX() { return facing().getAxis() == Direction.Axis.Z ? carW() / 2.0 : carD() / 2.0; }
-    public double halfZ() { return facing().getAxis() == Direction.Axis.Z ? carD() / 2.0 : carW() / 2.0; }
+    /** 월드 축 방향 반폭 (회전하면 감싸는 상자 기준) */
+    public double halfX() { Vec3 L = axisL(), F = axisF(); return Math.abs(L.x) * carW() / 2.0 + Math.abs(F.x) * carD() / 2.0; }
+    public double halfZ() { Vec3 L = axisL(), F = axisF(); return Math.abs(L.z) * carW() / 2.0 + Math.abs(F.z) * carD() / 2.0; }
+
+    /** 수평 위치 (x, z) 가 원점 o 기준 카 바닥 안인지 (margin 만큼 여유) */
+    public boolean insideXZ(double x, double z, Vec3 o, double margin) {
+        double dx = x - o.x, dz = z - o.z;
+        Vec3 L = axisL(), F = axisF();
+        double lx = dx * L.x + dz * L.z, lz = dx * F.x + dz * F.z;
+        return Math.abs(lx) <= carW() / 2.0 + margin && Math.abs(lz) <= carD() / 2.0 + margin;
+    }
 
     /** 바닥판 충돌 박스 (덤웨이터는 사람이 탈 수 없도록 전체가 충돌체) */
     @Override
@@ -178,9 +213,8 @@ public class ElevatorCarEntity extends Entity {
 
     /** 위치 p 기준으로 엔티티가 카 안에 있는지 */
     public boolean contains(Entity e, Vec3 p) {
-        double dx = Math.abs(e.getX() - p.x), dz = Math.abs(e.getZ() - p.z);
         double dy = e.getY() - p.y;
-        return dx <= halfX() + 0.2 && dz <= halfZ() + 0.2 && dy >= -0.45 && dy <= carH();
+        return insideXZ(e.getX(), e.getZ(), p, 0.2) && dy >= -0.45 && dy <= carH();
     }
 
     // ------------------------------------------------------------ 동작
@@ -236,7 +270,7 @@ public class ElevatorCarEntity extends Entity {
             e.fallDistance = 0;
             if (e instanceof ServerPlayer sp) { markRider(sp); continue; }
             if (e instanceof Player) continue;
-            boolean inside = Math.abs(e.getX() - old.x) <= hx && Math.abs(e.getZ() - old.z) <= hz;
+            boolean inside = insideXZ(e.getX(), e.getZ(), old, 0);
             if (!inside) continue;
             double ny = e.getY() + delta.y;
             if (ny < pos.y) ny = pos.y;

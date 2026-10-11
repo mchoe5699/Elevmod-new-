@@ -29,6 +29,10 @@ public final class ClientHooks {
         Minecraft.getInstance().setScreen(new com.mchoe.elevmod.client.screen.DesignStudioScreen(null, null));
     }
 
+    public static void openRotator(net.minecraft.world.InteractionHand hand) {
+        Minecraft.getInstance().setScreen(new com.mchoe.elevmod.client.screen.RotatorScreen(hand));
+    }
+
     public static void openOffset(BlockPos pos) {
         Minecraft.getInstance().setScreen(new com.mchoe.elevmod.client.screen.DeviceOffsetScreen(pos));
     }

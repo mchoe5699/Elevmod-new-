@@ -117,9 +117,7 @@ public final class CarGeometry {
     }
 
     public static AABB toWorld(ElevatorCarEntity car, Vec3 origin, float[] b) {
-        Direction f = car.facing();
-        Direction l = f.getCounterClockWise();
-        Vec3 F = new Vec3(f.getStepX(), 0, f.getStepZ()), L = new Vec3(l.getStepX(), 0, l.getStepZ());
+        Vec3 F = car.axisF(), L = car.axisL();
         Vec3 a = origin.add(L.scale(b[0])).add(0, b[1], 0).add(F.scale(b[2]));
         Vec3 c = origin.add(L.scale(b[3])).add(0, b[4], 0).add(F.scale(b[5]));
         return new AABB(a, c).inflate(0.04);
@@ -131,22 +129,25 @@ public final class CarGeometry {
         Vec3 end = eye.add(look.scale(3));
         double best = Double.MAX_VALUE;
         int hit = 0;
+        // 카 기준 좌표에서 판정 (회전기로 돌린 카도 정확히)
+        Vec3 L = car.axisL(), F = car.axisF(), o = eye.subtract(origin);
+        Vec3 pl = new Vec3(o.dot(L), o.y, o.dot(F)), dl = new Vec3(look.dot(L), look.y, look.dot(F));
+        Vec3 el = pl.add(dl.scale(3));
         for (Cop c : cops(car)) {
-            Optional<Vec3> h = toWorld(car, origin, c.box()).clip(eye, end);
-            if (h.isPresent() && h.get().distanceToSqr(eye) < best) { best = h.get().distanceToSqr(eye); hit = 1; }
+            float[] b = c.box();
+            Optional<Vec3> h = new AABB(b[0], b[1], b[2], b[3], b[4], b[5]).inflate(0.04).clip(pl, el);
+            if (h.isPresent() && h.get().distanceToSqr(pl) < best) { best = h.get().distanceToSqr(pl); hit = 1; }
         }
         if (car.state().getBoolean("acc")) for (float[] b : accessibleCops(car)) {
-            Optional<Vec3> h = toWorld(car, origin, b).clip(eye, end);
-            if (h.isPresent() && h.get().distanceToSqr(eye) < best) { best = h.get().distanceToSqr(eye); hit = 2; }
+            Optional<Vec3> h = new AABB(b[0], b[1], b[2], b[3], b[4], b[5]).inflate(0.04).clip(pl, el);
+            if (h.isPresent() && h.get().distanceToSqr(pl) < best) { best = h.get().distanceToSqr(pl); hit = 2; }
         }
         return hit;
     }
 
     /** 디자인 변경기: 시선이 가리키는 카 부위 (CarAction.PART_*), 없으면 -1 */
     public static int pick(ElevatorCarEntity car, Vec3 eye, Vec3 look, Vec3 origin) {
-        Direction f = car.facing();
-        Direction l = f.getCounterClockWise();
-        Vec3 F = new Vec3(f.getStepX(), 0, f.getStepZ()), L = new Vec3(l.getStepX(), 0, l.getStepZ());
+        Vec3 F = car.axisF(), L = car.axisL();
         Vec3 o = eye.subtract(origin);
         Vec3 p = new Vec3(o.dot(L), o.y, o.dot(F));           // 로컬 시점
         Vec3 dv = new Vec3(look.dot(L), look.y, look.dot(F));  // 로컬 방향
