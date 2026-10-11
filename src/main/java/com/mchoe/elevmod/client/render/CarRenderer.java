@@ -92,6 +92,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         c.car = car;
         c.ind = profile(car.getId(), st.getCompound("ind"));
         c.moving = st.getBoolean("mv");
+        c.open = st.getBoolean("dop");
 
         if (c.usage == Spec.Usage.WHEELCHAIR_LIFT) renderLift(c);
         else cab(c);
@@ -107,7 +108,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         Spec.WallFinish wallF; Spec.FloorFinish floorF; Spec.ButtonStyle copSt, accSt; Spec.Display disp;
         boolean lights, emg, glass, right, tenkey, cbtn;
         CustomDesign cd, cdDoor, cdCop, cdAcc, cdInd;
-        com.mchoe.elevmod.elevator.IndicatorProfile ind; boolean moving;
+        com.mchoe.elevmod.elevator.IndicatorProfile ind; boolean moving, open;
     }
 
     private static final java.util.Map<Integer, Object[]> PROFILES = new java.util.HashMap<>();
@@ -245,7 +246,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         // ---- 운전반 / 표시기
         if (c.usage.hasCop()) {
             cop(c);
-            if (c.fw > 0 && c.h - c.fh >= 0.24f) transomIndicator(c);
+            if (c.fw > 0) transomIndicator(c);   // 문 위 공간이 좁으면 CarGeometry.transom 이 null
             if (c.st.getBoolean("acc")) for (float[] b : CarGeometry.accessibleCops(c.car)) accessibleCop(c, b);
         }
     }
@@ -568,7 +569,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
     private void indicator(Ctx c, float x1, float y1, float x2, float y2, float z, String cur, int dir, String key) {
         String type = switch (c.disp) { case DOT -> "dot"; case LCD -> "lcd"; default -> "seg"; };
         int col = switch (c.disp) { case DOT -> 0xFFFF8A18; case LCD -> 0xFF7FE3FF; default -> 0xFFFF2A10; };
-        PanelDraw.display(c.ps, c.buf, c.ind, key == null ? null : c.car.getId() + key, type, col, 0xFF0E2E66, x1, y1, x2, y2, z, c.il, cur, dir, c.moving);
+        PanelDraw.display(c.ps, c.buf, c.ind, key == null ? null : c.car.getId() + key, type, col, 0xFF0E2E66, x1, y1, x2, y2, z, c.il, cur, dir, c.moving, c.open);
     }
 
     /**
@@ -583,7 +584,9 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         String cur = n > 0 ? names.getString(Math.max(0, Math.min(c.st.getInt("cur"), n - 1))) : "";
         if (pp.display != null) {
             float[] d = pp.display;
-            PanelDraw.display(c.ps, c.buf, c.ind, c.car.getId() + ":cc" + pw + y1, pp.dispType, pp.digit, pp.lcdBg, x0 + d[0] * pw, y1 + d[1] * H, x0 + d[2] * pw, y1 + d[3] * H, 0.001f, c.il, cur, c.st.getInt("dir"), c.moving);
+            float ddx = c.st.getFloat("cdx") / 100f / pw, ddy = c.st.getFloat("cdy") / 100f / H, ddw = c.st.getFloat("cdw") / 100f / pw, ddh = c.st.getFloat("cdh") / 100f / H;
+            d = new float[]{d[0] + ddx - ddw / 2, d[1] + ddy, d[2] + ddx + ddw / 2, d[3] + ddy + ddh};
+            PanelDraw.display(c.ps, c.buf, c.ind, c.car.getId() + ":cc" + pw + y1, pp.dispType, pp.digit, pp.lcdBg, x0 + d[0] * pw, y1 + d[1] * H, x0 + d[2] * pw, y1 + d[3] * H, 0.001f, c.il, cur, c.st.getInt("dir"), c.moving, c.open);
         }
         if (!c.cbtn || c.tenkey || pp.buttons.size() < n) return false;
         int[] fl = PanelDraw.assignFloors(pp.buttons, n);
@@ -611,9 +614,14 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         boolean touch = bs0 == Spec.ButtonStyle.TOUCH;
         int engrave = touch ? 0xFFB8BCC0 : 0xFF303030;
         // 표시창
-        float dy1 = y2 - 0.17f, dy2 = y2 - 0.05f;
+        // 제어반에서 정한 표시창 위치·크기 조정 (cm)
+        float ddx = st.getFloat("cdx") / 100f, ddy = st.getFloat("cdy") / 100f, ddw = st.getFloat("cdw") / 100f, ddh = st.getFloat("cdh") / 100f;
+        float dy1 = y2 - 0.17f + ddy, dy2 = y2 - 0.05f + ddy + ddh;
+        float dx1 = -pw / 2 + 0.03f + ddx - ddw / 2, dx2 = pw / 2 - 0.03f + ddx + ddw / 2;
+        if (dx2 - dx1 < 0.03f) dx2 = dx1 + 0.03f;
+        if (dy2 - dy1 < 0.03f) dy2 = dy1 + 0.03f;
         String cur = n > 0 ? names.getString(Math.max(0, Math.min(st.getInt("cur"), n - 1))) : "";
-        indicator(c, -pw / 2 + 0.03f, dy1, pw / 2 - 0.03f, dy2, z + 0.002f, cur, st.getInt("dir"), ":cop" + pw + y1);
+        indicator(c, dx1, dy1, dx2, dy2, z + 0.002f, cur, st.getInt("dir"), ":cop" + pw + y1);
         String sk = st.getString("st");
         if (!sk.isEmpty()) RenderUtil.text(ps, buf, I18n.get("elevmod.status." + sk), 0, dy1 - 0.012f, z + 0.003f, 0.016f, touch ? 0xFFFFD040 : 0xFFB06000);
         // 스피커 그릴
@@ -786,8 +794,11 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
             PanelDraw.face(c.ps, c.buf, ip, -ww / 2, b[1], ww, hh, 0.0005f, c.il);
             float zf = (ip.face != null ? ip.face.maxRaise() : 0) + 0.0015f;
             float[] d = ip.display != null ? ip.display : new float[]{0.1f, 0.15f, 0.9f, 0.85f};
-            PanelDraw.display(c.ps, c.buf, c.ind, c.car.getId() + ":tr", ip.dispType, ip.digit, ip.lcdBg, -ww / 2 + d[0] * ww, b[1] + d[1] * hh, -ww / 2 + d[2] * ww, b[1] + d[3] * hh, zf, c.il, cur, c.st.getInt("dir"), c.moving);
-        } else indicator(c, -0.16f, b[1], 0.16f, b[4], 0, cur, c.st.getInt("dir"), ":tr");
+            PanelDraw.display(c.ps, c.buf, c.ind, c.car.getId() + ":tr", ip.dispType, ip.digit, ip.lcdBg, -ww / 2 + d[0] * ww, b[1] + d[1] * hh, -ww / 2 + d[2] * ww, b[1] + d[3] * hh, zf, c.il, cur, c.st.getInt("dir"), c.moving, c.open);
+        } else {
+            float hw = (b[3] - b[0]) / 2;
+            indicator(c, -hw, b[1], hw, b[4], 0, cur, c.st.getInt("dir"), ":tr");
+        }
         c.ps.popPose();
         c.ps.popPose();
     }

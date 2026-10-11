@@ -31,7 +31,7 @@ public class IndicatorScreen extends Screen {
     private final Screen parent;
     private CompoundTag data;
     private int page = 0, previewKind = 0;
-    private static final String[] PAGES = {"elevmod.ind.page.trans", "elevmod.ind.page.shape", "elevmod.ind.page.color", "elevmod.ind.page.anim", "elevmod.ind.page.behavior"};
+    private static final String[] PAGES = {"elevmod.ind.page.trans", "elevmod.ind.page.shape", "elevmod.ind.page.color", "elevmod.ind.page.anim", "elevmod.ind.page.behavior", "elevmod.ind.page.carlayout", "elevmod.ind.page.celllayout"};
     private static final String[] KINDS = {"seg", "dot", "lcd"};
     private final List<Label> labels = new ArrayList<>();
     private final Map<String, EditBox> boxes = new HashMap<>();
@@ -75,7 +75,7 @@ public class IndicatorScreen extends Screen {
         for (int i = 0; i < PAGES.length; i++) {
             final int pi = i;
             addRenderableWidget(Button.builder(Component.translatable(PAGES[i]).withStyle(i == page ? ChatFormatting.YELLOW : ChatFormatting.WHITE), b -> { page = pi; rebuildWidgets(); })
-                    .bounds(left + i * 70, top, 68, 18).build());
+                    .bounds(left + i * 50, top, 49, 18).build());
         }
         IndicatorProfile p = prof();
         int y = top + 26;
@@ -120,6 +120,7 @@ public class IndicatorScreen extends Screen {
                 y = anim(y, "ind.animUp", "elevmod.ind.animUp", p.animUp);
                 labels.add(new Label(I18n.get("elevmod.ind.anim_down_note"), left() + 4, y + 2));
                 y += 14;
+                y = anim(y, "ind.animOpen", "elevmod.ind.animOpen", p.animOpen);
                 y = anim(y, "ind.animIdle", "elevmod.ind.animIdle", p.animIdle);
                 addRenderableWidget(Button.builder(Component.translatable("elevmod.anim.open_editor").withStyle(ChatFormatting.AQUA), b -> minecraft.setScreen(new DotAnimEditorScreen(this, null)))
                         .bounds(left, y + 4, 200, 20).build());
@@ -131,8 +132,27 @@ public class IndicatorScreen extends Screen {
                 if (data.getBoolean("hallCancel")) y = typed(y, "hallcancelN", "elevmod.ind.cancelN", String.valueOf(data.getInt("hallCancelN")), "elevmod.unit.times");
                 y = cycle(y, "carcancel", "elevmod.ind.carcancel", Component.translatable(data.getBoolean("carCancel") ? "elevmod.on" : "elevmod.off"));
                 if (data.getBoolean("carCancel")) y = typed(y, "carcancelN", "elevmod.ind.cancelN", String.valueOf(data.getInt("carCancelN")), "elevmod.unit.times");
+            }
+            case 5 -> {
+                // 카 안 표시기: 문 위 표시기 위치·크기, 운전반 표시창 위치·크기 (cm)
                 y = typed(y, "indx", "elevmod.ind.indx", f1(data.getFloat("indOffX")), "elevmod.unit.cm");
                 y = typed(y, "indy", "elevmod.ind.indy", f1(data.getFloat("indOffY")), "elevmod.unit.cm");
+                y = typed(y, "indw", "elevmod.ind.indw", f1(data.getFloat("indW")), "elevmod.unit.cm0");
+                y = typed(y, "indh", "elevmod.ind.indh", f1(data.getFloat("indH")), "elevmod.unit.cm0");
+                y = typed(y, "copdx", "elevmod.ind.copdx", f1(data.getFloat("copDX")), "elevmod.unit.cm");
+                y = typed(y, "copdy", "elevmod.ind.copdy", f1(data.getFloat("copDY")), "elevmod.unit.cm");
+                y = typed(y, "copdw", "elevmod.ind.copdw", f1(data.getFloat("copDW")), "elevmod.unit.cm");
+                y = typed(y, "copdh", "elevmod.ind.copdh", f1(data.getFloat("copDH")), "elevmod.unit.cm");
+                labels.add(new Label(I18n.get("elevmod.ind.layout_hint"), left, y + 6));
+            }
+            case 6 -> {
+                // 표시 칸 배치: 화살표 칸 폭·크기, 숫자 위치·크기 (모든 표시기에 적용)
+                y = typed(y, "ind.arroww", "elevmod.ind.arroww", String.valueOf(p.arrowW), "elevmod.unit.pct");
+                y = typed(y, "ind.arrowscale", "elevmod.ind.arrowscale", String.valueOf(p.arrowScale), "elevmod.unit.pct");
+                y = typed(y, "ind.numx", "elevmod.ind.numx", String.valueOf(p.numX), "elevmod.unit.pct");
+                y = typed(y, "ind.numy", "elevmod.ind.numy", String.valueOf(p.numY), "elevmod.unit.pct");
+                y = typed(y, "ind.numscale", "elevmod.ind.numscale", String.valueOf(p.numScale), "elevmod.unit.pct");
+                labels.add(new Label(I18n.get("elevmod.ind.cell_hint"), left, y + 6));
             }
             default -> {}
         }

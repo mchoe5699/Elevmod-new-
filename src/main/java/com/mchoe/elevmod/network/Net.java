@@ -26,7 +26,7 @@ import java.util.function.Supplier;
 public final class Net {
     private Net() {}
 
-    private static final String VER = "4";
+    private static final String VER = "5";
     public static final SimpleChannel CH = NetworkRegistry.newSimpleChannel(new ResourceLocation(ElevMod.MODID, "main"), () -> VER, VER::equals, VER::equals);
 
     public static void init() {
@@ -79,14 +79,19 @@ public final class Net {
         }
     }
 
+    public static final java.util.Set<String> LAYOUT_KEYS = java.util.Set.of("indx", "indy", "indw", "indh", "copdx", "copdy", "copdw", "copdh", "layout_reset");
+
     public record EditMsg(BlockPos ctrl, String key, int delta, String text) {
         public void encode(FriendlyByteBuf b) { b.writeBlockPos(ctrl); b.writeUtf(key, 64); b.writeVarInt(delta); b.writeUtf(text, 64); }
         public static EditMsg decode(FriendlyByteBuf b) { return new EditMsg(b.readBlockPos(), b.readUtf(64), b.readVarInt(), b.readUtf(64)); }
         public void handle(Supplier<NetworkEvent.Context> ctx) {
             ServerPlayer p = ctx.get().getSender();
             if (p == null || !p.level().isLoaded(ctrl)) return;
-            if (p.position().distanceTo(Vec3.atCenterOf(ctrl)) > 10) return;
-            if (p.level().getBlockEntity(ctrl) instanceof ControllerBlockEntity c) c.edit(p, key, delta, text);
+            if (!(p.level().getBlockEntity(ctrl) instanceof ControllerBlockEntity c)) return;
+            boolean near = p.position().distanceTo(Vec3.atCenterOf(ctrl)) <= 10;
+            // 카 안 표시기 배치는 카 안(디자인 변경기 위치 조정 모드)에서도 바꿀 수 있음
+            boolean layout = LAYOUT_KEYS.contains(key) && !c.floors.isEmpty() && p.position().distanceTo(c.carPos()) <= 24;
+            if (near || layout) c.edit(p, key, delta, text);
         }
     }
 
@@ -105,16 +110,20 @@ public final class Net {
     }
 
     /** 승강장 장치 위치 조정 (1/16 블록 단위) */
-    public record OffsetMsg(BlockPos pos, int dx, int dy, boolean reset) {
-        public void encode(FriendlyByteBuf b) { b.writeBlockPos(pos); b.writeVarInt(dx); b.writeVarInt(dy); b.writeBoolean(reset); }
-        public static OffsetMsg decode(FriendlyByteBuf b) { return new OffsetMsg(b.readBlockPos(), b.readVarInt(), b.readVarInt(), b.readBoolean()); }
+    public record OffsetMsg(BlockPos pos, int dx, int dy, boolean reset, int dw, int dh) {
+        public OffsetMsg(BlockPos pos, int dx, int dy, boolean reset) { this(pos, dx, dy, reset, 0, 0); }
+        public void encode(FriendlyByteBuf b) { b.writeBlockPos(pos); b.writeVarInt(dx); b.writeVarInt(dy); b.writeBoolean(reset); b.writeVarInt(dw); b.writeVarInt(dh); }
+        public static OffsetMsg decode(FriendlyByteBuf b) { return new OffsetMsg(b.readBlockPos(), b.readVarInt(), b.readVarInt(), b.readBoolean(), b.readVarInt(), b.readVarInt()); }
         public void handle(Supplier<NetworkEvent.Context> ctx) {
             ServerPlayer p = ctx.get().getSender();
             if (p == null || !p.level().isLoaded(pos)) return;
             if (p.position().distanceTo(Vec3.atCenterOf(pos)) > 10) return;
             if (p.level().getBlockEntity(pos) instanceof DeviceBlockEntity d) {
-                if (reset) d.setOffset(0, 0);
-                else d.setOffset(d.offX + dx, d.offY + dy);
+                if (reset) { d.setOffset(0, 0); d.setSize(100, 100); }
+                else {
+                    if (dx != 0 || dy != 0) d.setOffset(d.offX + dx, d.offY + dy);
+                    if (dw != 0 || dh != 0) d.setSize(d.sizeW + dw, d.sizeH + dh);
+                }
             }
         }
     }

@@ -78,10 +78,15 @@ public class DeviceBlock extends BaseEntityBlock {
     @Override
     public VoxelShape getShape(BlockState s, BlockGetter g, BlockPos p, CollisionContext c) {
         int ox = 0, oy = 0;
-        if (g.getBlockEntity(p) instanceof DeviceBlockEntity d) { ox = d.offX; oy = d.offY; }
+        double sw = 1, sh = 1;
+        if (g.getBlockEntity(p) instanceof DeviceBlockEntity d) { ox = d.offX; oy = d.offY; sw = d.sizeW / 100.0; sh = d.sizeH / 100.0; }
+        // 크기 조정 (가운데 기준)
+        double cx = (kind.x1 + kind.x2) / 2, cy = (kind.y1 + kind.y2) / 2;
+        double kx1 = cx - (cx - kind.x1) * sw, kx2 = cx + (kind.x2 - cx) * sw, ky1 = cy - (cy - kind.y1) * sh, ky2 = cy + (kind.y2 - cy) * sh;
         // 모델 좌표계(앞면이 북쪽)에서 x 증가 = 정면에서 볼 때 왼쪽 → 오른쪽 이동은 x 감소
-        double y1 = Math.max(-16, kind.y1 + oy), y2 = Math.min(32, kind.y2 + oy);
-        return Shapes2.wall(s.getValue(FACING), kind.x1 - ox, y1, kind.x2 - ox, y2, kind.depth);
+        double y1 = Math.max(-16, ky1 + oy), y2 = Math.min(32, ky2 + oy);
+        double x1 = Math.max(-16, kx1 - ox), x2 = Math.min(32, kx2 - ox);
+        return Shapes2.wall(s.getValue(FACING), x1, y1, x2, y2, kind.depth);
     }
 
     @Nullable
@@ -110,6 +115,7 @@ public class DeviceBlock extends BaseEntityBlock {
         switch (kind) {
             case HALL_BUTTON, HALL_PANEL -> {
                 double ly = hit.getLocation().y - pos.getY() - d.offY / 16.0;
+                if (d.sizeH != 100) { double pcy = (kind.y1 + kind.y2) / 32.0; ly = pcy + (ly - pcy) * 100.0 / d.sizeH; }
                 double split = kind == Kind.HALL_PANEL ? 0.175 : 0.245;
                 boolean up = ly >= split;
                 if (!d.hasUp) up = false;

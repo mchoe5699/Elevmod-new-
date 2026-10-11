@@ -23,6 +23,8 @@ public class DeviceOffsetScreen extends Screen {
 
     private void move(int dx, int dy, boolean reset) { Net.CH.sendToServer(new Net.OffsetMsg(pos, dx, dy, reset)); }
 
+    private void size(int dw, int dh) { Net.CH.sendToServer(new Net.OffsetMsg(pos, 0, 0, false, dw, dh)); }
+
     @Override
     protected void init() {
         int cx = width / 2, cy = height / 2;
@@ -36,6 +38,12 @@ public class DeviceOffsetScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("▶"), b -> move(1, 0, false)).bounds(cx + 60, cy - 10, 30, 20).build());
         addRenderableWidget(Button.builder(Component.literal("▲"), b -> move(0, 1, false)).bounds(cx - 15, cy - 50, 30, 20).build());
         addRenderableWidget(Button.builder(Component.literal("▼"), b -> move(0, -1, false)).bounds(cx - 15, cy + 30, 30, 20).build());
+        // 크기 (Shift: 1%씩)
+        int sy = cy + 30;
+        addRenderableWidget(Button.builder(Component.literal("W −"), b -> size(Screen.hasShiftDown() ? -1 : -10, 0)).bounds(cx + 100, sy, 24, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("W +"), b -> size(Screen.hasShiftDown() ? 1 : 10, 0)).bounds(cx + 126, sy, 24, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("H −"), b -> size(0, Screen.hasShiftDown() ? -1 : -10)).bounds(cx + 100, sy + 22, 24, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("H +"), b -> size(0, Screen.hasShiftDown() ? 1 : 10)).bounds(cx + 126, sy + 22, 24, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("elevmod.offset.reset"), b -> move(0, 0, true)).bounds(cx - 40, cy + 95, 80, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose()).bounds(cx - 40, height - 28, 80, 20).build());
     }
@@ -45,7 +53,9 @@ public class DeviceOffsetScreen extends Screen {
         renderBackground(g);
         g.drawCenteredString(font, title, width / 2, 14, 0xFFFFFF);
         int ox = 0, oy = 0;
-        if (minecraft != null && minecraft.level != null && minecraft.level.getBlockEntity(pos) instanceof DeviceBlockEntity d) { ox = d.offX; oy = d.offY; }
+        int sw = 100, sh = 100;
+        if (minecraft != null && minecraft.level != null && minecraft.level.getBlockEntity(pos) instanceof DeviceBlockEntity d) { ox = d.offX; oy = d.offY; sw = d.sizeW; sh = d.sizeH; }
+        g.drawString(font, I18n.get("elevmod.offset.size", sw, sh), width / 2 + 100, height / 2 + 18, 0xFFFFD040, false);
         g.drawCenteredString(font, I18n.get("elevmod.offset.value", fmt(ox), fmt(oy)), width / 2, height / 2 - 4, 0xFFFFD040);
         g.drawCenteredString(font, I18n.get("elevmod.offset.hint"), width / 2, height / 2 + 125, 0xFFAAAAAA);
         super.render(g, mx, my, pt);

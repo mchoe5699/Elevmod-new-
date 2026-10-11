@@ -79,6 +79,21 @@ public final class ClientEvents {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer p = mc.player;
         if (p == null) return;
+        // 디자인 변경기 위치 조정 모드: 카 안 표시기(문 위)·운전반 표시창의 위치·크기 화면
+        if (p.getMainHandItem().getItem() instanceof com.mchoe.elevmod.item.DesignToolItem && com.mchoe.elevmod.item.DesignToolItem.positionMode(p.getMainHandItem())) {
+            for (ElevatorCarEntity car : CARS) {
+                if (car.cCur == null || !car.contains(p, car.cCur)) continue;
+                int target = -1;
+                if (CarGeometry.lookingAtCop(car, p.getEyePosition(1f), p.getViewVector(1f), car.cCur) != 0) target = 1;
+                else if (CarGeometry.pick(car, p.getEyePosition(1f), p.getViewVector(1f), car.cCur) == com.mchoe.elevmod.elevator.CarAction.PART_INDICATOR) target = 0;
+                if (target < 0 && p.isShiftKeyDown()) target = 0;   // 웅크리고 우클릭: 어디를 보든 배치 화면
+                if (target < 0) continue;
+                mc.setScreen(new com.mchoe.elevmod.client.screen.CarLayoutScreen(car, target));
+                e.setCanceled(true);
+                e.setSwingHand(true);
+                return;
+            }
+        }
         // 디자인 변경기: 카 안에서 보고 있는 부위의 의장 변경
         if (p.getMainHandItem().getItem() instanceof com.mchoe.elevmod.item.DesignToolItem && !com.mchoe.elevmod.item.DesignToolItem.positionMode(p.getMainHandItem())) {
             for (ElevatorCarEntity car : CARS) {

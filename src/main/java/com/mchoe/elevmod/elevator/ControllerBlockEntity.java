@@ -116,6 +116,8 @@ public class ControllerBlockEntity extends BlockEntity {
     public int hallCancelN = 2, carCancelN = 2;
     /** 카 안 위치표시기(트랜섬) 위치 조정 (cm) */
     public float indOffX = 0, indOffY = 0;
+    /** 카 안 위치표시기 크기 (cm, 0 = 자동), 운전반 표시창 위치·크기 조정 (cm) */
+    public float indW = 0, indH = 0, copDX = 0, copDY = 0, copDW = 0, copDH = 0;
     // 일시 상태
     private int pendingOpen, arrivedTick = -10000, arrivedDir, arrivedFloor = -1;
     private final java.util.Map<String, int[]> pressCount = new java.util.HashMap<>();
@@ -1100,8 +1102,11 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putInt("cur", floors.isEmpty() ? 0 : nearestIdx(s));
         t.putInt("dir", displayDir());
         t.putBoolean("mv", state == State.MOVING);
+        t.putBoolean("dop", (state == State.OPENING || state == State.OPEN) && doorPos > 0);
         t.put("ind", indTag());
         t.putFloat("indx", indOffX); t.putFloat("indy", indOffY);
+        t.putFloat("indw", indW); t.putFloat("indh", indH);
+        t.putFloat("cdx", copDX); t.putFloat("cdy", copDY); t.putFloat("cdw", copDW); t.putFloat("cdh", copDH);
         t.putString("st", statusKey());
         t.putInt("mode", mode.ordinal());
         t.putInt("usage", usage.ordinal());
@@ -1207,6 +1212,7 @@ public class ControllerBlockEntity extends BlockEntity {
             }
             boolean here = fi >= 0 && fi == cur && doorsOpen;
             d.setIndTag(indTag());
+            d.setDoorOpen(doorsOpen && doorPos > 0);
             d.applyDisplay(text, ddir, statusKey(), state == State.MOVING, here && dir > 0, here && dir < 0, here && dir == 0,
                     up, down, hasUp, hasDown, String.valueOf(letter()), usage == Spec.Usage.DUMBWAITER, floors.get(Math.max(0, fi)).name, namesList());
         }
@@ -1899,6 +1905,13 @@ public class ControllerBlockEntity extends BlockEntity {
             case "carcancel" -> carCancel = !carCancel;
             case "carcancelN" -> carCancelN = Math.max(1, Math.min(9, (int) IndicatorProfile.num(text, carCancelN, 1, 9)));
             case "indx" -> indOffX = IndicatorProfile.num(text, indOffX, -150f, 150f);
+            case "indw" -> indW = IndicatorProfile.num(text, indW, 0f, 150f);
+            case "indh" -> indH = IndicatorProfile.num(text, indH, 0f, 60f);
+            case "copdx" -> copDX = IndicatorProfile.num(text, copDX, -40f, 40f);
+            case "copdy" -> copDY = IndicatorProfile.num(text, copDY, -120f, 40f);
+            case "copdw" -> copDW = IndicatorProfile.num(text, copDW, -20f, 30f);
+            case "copdh" -> copDH = IndicatorProfile.num(text, copDH, -10f, 40f);
+            case "layout_reset" -> { indOffX = 0; indOffY = 0; indW = 0; indH = 0; copDX = 0; copDY = 0; copDW = 0; copDH = 0; }
             case "indy" -> indOffY = IndicatorProfile.num(text, indOffY, -100f, 100f);
             case "serial" -> {
                 String v = text.trim();
@@ -2113,6 +2126,8 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putBoolean("hallCancel", hallCancel); t.putInt("hallCancelN", hallCancelN);
         t.putBoolean("carCancel", carCancel); t.putInt("carCancelN", carCancelN);
         t.putFloat("indOffX", indOffX); t.putFloat("indOffY", indOffY);
+        t.putFloat("indW", indW); t.putFloat("indH", indH);
+        t.putFloat("copDX", copDX); t.putFloat("copDY", copDY); t.putFloat("copDW", copDW); t.putFloat("copDH", copDH);
         t.putFloat("openSec", openSec); t.putFloat("closeSec", closeSec);
         t.putInt("designMode", designMode.ordinal()); t.putString("customDesign", customDesign);
         t.putBoolean("designUnified", designUnified);
@@ -2173,6 +2188,8 @@ public class ControllerBlockEntity extends BlockEntity {
         hallCancel = t.getBoolean("hallCancel"); hallCancelN = t.contains("hallCancelN") ? t.getInt("hallCancelN") : 2;
         carCancel = !t.contains("carCancel") || t.getBoolean("carCancel"); carCancelN = t.contains("carCancelN") ? t.getInt("carCancelN") : 2;
         indOffX = t.getFloat("indOffX"); indOffY = t.getFloat("indOffY");
+        indW = t.getFloat("indW"); indH = t.getFloat("indH");
+        copDX = t.getFloat("copDX"); copDY = t.getFloat("copDY"); copDW = t.getFloat("copDW"); copDH = t.getFloat("copDH");
         openSec = t.getFloat("openSec"); closeSec = t.getFloat("closeSec");
         designMode = en(Spec.DesignMode.values(), t.getInt("designMode"));
         customDesign = t.getString("customDesign");

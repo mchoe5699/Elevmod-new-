@@ -246,7 +246,7 @@ public final class PhotoScenes {
         x += 10;
         ControllerBlockEntity sw = elevator(l, p, x, 0, 2, 4, 2, 2, false, cc -> {
             cc.usage = Spec.Usage.PASSENGER; cc.capIdx = 8; cc.doorType = Spec.DoorType.S2; cc.window = true; cc.windowMask = 0b01;
-            cc.carDisplay = Spec.Display.DOT; cc.indOffX = 25; cc.indOffY = 4;
+            cc.carDisplay = Spec.Display.DOT; cc.indOffX = 25; cc.indOffY = 4; cc.indW = 50; cc.indH = 12; cc.copDY = -4; cc.copDH = 4;
             cc.ind.dotCols = 5; cc.ind.dotRows = 12; cc.ind.dotOn = 0xFF40FF60;
         });
         indCtrl = sw.getBlockPos();
@@ -297,6 +297,7 @@ public final class PhotoScenes {
                     if (sx == -13) ip.dotOn = 0xFF40FF60;
                     if (sx == -14) ip.dotRound = false;
                     de.forceIndTag(ip.save());
+                    if (sx == -6) de.setSize(150, 130);   // 크기 조정한 표시기
                 }
                 sx += 2;
             }

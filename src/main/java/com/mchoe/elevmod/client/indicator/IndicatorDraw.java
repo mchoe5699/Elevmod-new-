@@ -57,6 +57,12 @@ public final class IndicatorDraw {
      */
     public static void draw(PoseStack ps, MultiBufferSource buf, @Nullable IndicatorProfile prof, String kind, int baseOn, int baseBg,
                             float x1, float y1, float x2, float y2, float z, int light, String text, int dir, boolean moving, @Nullable Object key) {
+        draw(ps, buf, prof, kind, baseOn, baseBg, x1, y1, x2, y2, z, light, text, dir, moving, false, key);
+    }
+
+    /** open = 카 문이 열리는 중·열려 있음 → 문열림 애니메이션 */
+    public static void draw(PoseStack ps, MultiBufferSource buf, @Nullable IndicatorProfile prof, String kind, int baseOn, int baseBg,
+                            float x1, float y1, float x2, float y2, float z, int light, String text, int dir, boolean moving, boolean open, @Nullable Object key) {
         IndicatorProfile p = prof == null ? DEFAULT : prof;
         float t = now();
         St st = state(key, text, dir, t);
@@ -71,11 +77,14 @@ public final class IndicatorDraw {
         float zz = z + 0.0004f;
         // 애니메이션 고르기
         // 화살표 애니메이션은 '상승' 하나만 만들고, 하강은 180도 돌려서 거꾸로 움직이게 함
+        // 문이 열리는 중·열려 있으면 '문열림' 애니메이션 (지정했을 때)
+        DotAnim openAnim = open && !moving && dir != 0 ? AnimLibrary.get(p.animOpen) : null;
+        if (openAnim != null && openAnim.isFont()) openAnim = null;
         String animId = dir != 0 ? p.animUp : p.animIdle;
-        DotAnim anim = AnimLibrary.get(animId);
+        DotAnim anim = openAnim != null ? openAnim : AnimLibrary.get(animId);
         if (anim != null && anim.isFont()) anim = null;
         boolean rot = dir < 0;
-        boolean still = dir != 0 && !moving;   // 정차 중이지만 갈 방향이 있음 → 정지 장면
+        boolean still = openAnim == null && dir != 0 && !moving;   // 정차 중이지만 갈 방향이 있음 → 정지 장면
         float animT = st == null ? t : t - st.dirT;
         if (anim != null && anim.full) {
             // 표시기 전체를 덮는 애니메이션
@@ -83,10 +92,17 @@ public final class IndicatorDraw {
             return;
         }
         // 화살표 칸 / 숫자 칸
-        float ax2 = x1 + w * 0.3f;
-        float[] num = {ax2, y1 + h * 0.08f, x2 - w * 0.03f, y2 - h * 0.08f};
-        if (anim != null) drawAnim(ps, buf, anim, animT, x1 + w * 0.04f, y1 + h * 0.1f, ax2 - w * 0.02f, y2 - h * 0.1f, zz, light, p.dotRound, Glyphs.dim(anim.palette[0], 0.1f), rot, still);
-        else builtinArrow(ps, buf, p, kind, x1, y1, ax2, y2, zz, light, on, off, dir, moving, t);
+        // 배치: 화살표 칸 폭(%), 숫자 위치·크기(%), 화살표 크기(%)
+        float ax2 = x1 + w * p.arrowW / 100f;
+        float[] num = scaleRect(new float[]{ax2, y1 + h * 0.08f, x2 - w * 0.03f, y2 - h * 0.08f}, p.numScale / 100f, w * p.numX / 100f, h * p.numY / 100f);
+        if (p.arrowW > 0) {
+            float[] ar = scaleRect(new float[]{x1 + w * 0.04f, y1 + h * 0.1f, ax2 - w * 0.02f, y2 - h * 0.1f}, p.arrowScale / 100f, 0, 0);
+            if (anim != null) drawAnim(ps, buf, anim, animT, ar[0], ar[1], ar[2], ar[3], zz, light, p.dotRound, Glyphs.dim(anim.palette[0], 0.1f), rot, still);
+            else {
+                float[] ab = scaleRect(new float[]{x1, y1, ax2, y2}, p.arrowScale / 100f, 0, 0);
+                builtinArrow(ps, buf, p, kind, ab[0], ab[1], ab[2], ab[3], zz, light, on, off, dir, moving, t);
+            }
+        }
         // 층 숫자 (+ 전환 효과)
         float prog = st == null || p.trans == 0 ? 1f : Math.max(0, Math.min(1, (t - st.changeT) / Math.max(0.05f, p.transSec)));
         if (prog >= 1 || st == null || st.prev.isEmpty()) { number(ps, buf, p, kind, text, num, 0, 0, null, zz, light, on, off, 1f); return; }
@@ -123,6 +139,12 @@ public final class IndicatorDraw {
             if (prog < 0.5f) number(ps, buf, p, kind, st.prev, num, 0, 0, null, zz, light, mix(on, off, prog * 2), off, 1 - prog * 2);
             else number(ps, buf, p, kind, text, num, 0, 0, null, zz, light, mix(off, on, prog * 2 - 1), off, prog * 2 - 1);
         }
+    }
+
+    /** 가운데 기준으로 k 배, (dx, dy) 만큼 이동 */
+    static float[] scaleRect(float[] r, float k, float dx, float dy) {
+        float cx = (r[0] + r[2]) / 2 + dx, cy = (r[1] + r[3]) / 2 + dy, hw = (r[2] - r[0]) / 2 * k, hh = (r[3] - r[1]) / 2 * k;
+        return new float[]{cx - hw, cy - hh, cx + hw, cy + hh};
     }
 
     static int mix(int a, int b, float k) {

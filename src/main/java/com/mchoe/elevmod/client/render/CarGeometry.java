@@ -100,14 +100,20 @@ public final class CarGeometry {
         CompoundTag st = car.state();
         float fw = st.getFloat("fw"), fh = st.getFloat("fh"), fo = st.getFloat("fo");
         float h = car.carH(), d = car.carD();
-        if (fw <= 0 || h - fh < 0.24f) return null;
-        // 제어반에서 정한 위치 조정 (cm, 실내에서 볼 때 오른쪽·위가 +)
+        if (fw <= 0) return null;
+        // 제어반에서 정한 위치·크기 (cm, 실내에서 볼 때 오른쪽·위가 +, 크기 0 = 자동)
         float ox = st.getFloat("indx") / 100f, oy = st.getFloat("indy") / 100f;
-        float y1 = fh + 0.05f + oy, y2 = Math.min(h - 0.06f, fh + 0.19f) + oy;
+        float iw = st.getFloat("indw") / 100f, ih = st.getFloat("indh") / 100f;
+        boolean custom = ox != 0 || oy != 0 || iw > 0 || ih > 0;
+        float gap = h - fh;
+        if (gap < 0.24f && !custom && gap < 0.12f) return null;   // 문 위 공간이 너무 좁음 (위치를 옮기면 표시)
+        float hw = iw > 0 ? Math.max(0.04f, iw / 2) : 0.16f;
+        float hh = ih > 0 ? Math.max(0.03f, ih) : Math.max(0.06f, Math.min(0.14f, gap - 0.1f));
+        float y1 = fh + Math.min(0.05f, Math.max(0.01f, (gap - hh) / 2)) + oy, y2 = y1 + hh;
         if (y2 > h - 0.01f) { y1 -= y2 - (h - 0.01f); y2 = h - 0.01f; }
         if (y1 < 0.05f) { y2 += 0.05f - y1; y1 = 0.05f; }
-        float cx = Math.max(-car.carW() / 2 + 0.18f, Math.min(car.carW() / 2 - 0.18f, fo - ox));
-        return new float[]{cx - 0.16f, y1, d / 2 - T - 0.012f, cx + 0.16f, y2, d / 2 - T};
+        float cx = Math.max(-car.carW() / 2 + hw + 0.02f, Math.min(car.carW() / 2 - hw - 0.02f, fo - ox));
+        return new float[]{cx - hw, y1, d / 2 - T - 0.012f, cx + hw, y2, d / 2 - T};
     }
 
     public static AABB toWorld(ElevatorCarEntity car, Vec3 origin, float[] b) {

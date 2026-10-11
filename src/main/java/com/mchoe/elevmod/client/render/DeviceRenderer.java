@@ -41,6 +41,13 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
             ps.mulPose(Axis.YP.rotationDegrees(-d.yaw));
             ps.translate(0, 0, -pz);
         }
+        if (d.sizeW != 100 || d.sizeH != 100) {
+            // 크기 조정: 판 가운데를 기준으로 가로·세로 배율
+            float pcy = (float) (k.y1 + k.y2) / 32f;
+            ps.translate(0, pcy, 0);
+            ps.scale(d.sizeW / 100f, d.sizeH / 100f, 1f);
+            ps.translate(0, -pcy, 0);
+        }
         float z = -0.5f + (float) k.depth / 16f + 0.0015f;
         float hw = (float) (k.x2 - k.x1) / 32f;
         float y1 = (float) k.y1 / 16f, y2 = (float) k.y2 / 16f;
@@ -78,7 +85,7 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
                 plate(ps, buf, bs, -hw, y1, hw, y2, z, light);
                 Glyphs.rect(ps, buf, -hw + 0.03f, 0.38f, hw - 0.03f, 0.58f, z + 0.002f, FULL, 0xFF140404);
                 if (linked) {
-                    PanelDraw.display(ps, buf, d.profile(), d.getBlockPos(), "seg", RED, 0xFF140404, -hw + 0.03f, 0.40f, hw - 0.03f, 0.56f, z + 0.0025f, light, d.text, d.dir, d.moving);
+                    PanelDraw.display(ps, buf, d.profile(), d.getBlockPos(), "seg", RED, 0xFF140404, -hw + 0.03f, 0.40f, hw - 0.03f, 0.56f, z + 0.0025f, light, d.text, d.dir, d.moving, d.doorOpen);
                     String s = status(d);
                     if (!s.isEmpty()) RenderUtil.text(ps, buf, s, 0, 0.395f, z + 0.004f, 0.018f, 0xFFFFD040);
                 }
@@ -88,14 +95,14 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
                 Glyphs.rect(ps, buf, -hw + 0.012f, y1 + 0.012f, hw - 0.012f, y2 - 0.012f, z + 0.002f, FULL, 0xFF120404);
                 if (!linked) break;
                 int col = SEG_COLORS[Math.floorMod(des, SEG_COLORS.length)];
-                PanelDraw.display(ps, buf, d.profile(), d.getBlockPos(), "seg", col, 0xFF120404, -hw + 0.02f, y1 + 0.03f, hw - 0.02f, y2 - 0.03f, z + 0.0025f, light, d.text, d.dir, d.moving);
+                PanelDraw.display(ps, buf, d.profile(), d.getBlockPos(), "seg", col, 0xFF120404, -hw + 0.02f, y1 + 0.03f, hw - 0.02f, y2 - 0.03f, z + 0.0025f, light, d.text, d.dir, d.moving, d.doorOpen);
                 String s = status(d);
                 if (!s.isEmpty()) RenderUtil.text(ps, buf, s, 0, y1 + 0.02f, z + 0.004f, 0.018f, col);
             }
             case IND_DOT -> {
                 Glyphs.rect(ps, buf, -hw + 0.012f, y1 + 0.012f, hw - 0.012f, y2 - 0.012f, z + 0.002f, FULL, 0xFF0C0806);
                 int col = DOT_COLORS[Math.floorMod(des, DOT_COLORS.length)];
-                if (linked) PanelDraw.display(ps, buf, d.profile(), d.getBlockPos(), "dot", col, 0xFF0C0806, -hw + 0.02f, y1 + 0.02f, hw - 0.02f, y2 - 0.02f, z + 0.0025f, light, d.text, d.dir, d.moving);
+                if (linked) PanelDraw.display(ps, buf, d.profile(), d.getBlockPos(), "dot", col, 0xFF0C0806, -hw + 0.02f, y1 + 0.02f, hw - 0.02f, y2 - 0.02f, z + 0.0025f, light, d.text, d.dir, d.moving, d.doorOpen);
                 String s = linked ? status(d) : "";
                 if (!s.isEmpty()) RenderUtil.text(ps, buf, s, 0, y1 + 0.02f, z + 0.004f, 0.018f, col);
             }
@@ -103,7 +110,7 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
                 int[] pal = LCD_PAL[Math.floorMod(des, LCD_PAL.length)];
                 Glyphs.rect(ps, buf, -hw + 0.015f, y1 + 0.015f, hw - 0.015f, y2 - 0.015f, z + 0.002f, FULL, pal[0]);
                 if (!linked) break;
-                PanelDraw.display(ps, buf, d.profile(), d.getBlockPos(), "lcd", pal[1], pal[0], -hw + 0.015f, y1 + 0.08f, hw - 0.015f, y2 - 0.015f, z + 0.0025f, light, d.text, d.dir, d.moving);
+                PanelDraw.display(ps, buf, d.profile(), d.getBlockPos(), "lcd", pal[1], pal[0], -hw + 0.015f, y1 + 0.08f, hw - 0.015f, y2 - 0.015f, z + 0.0025f, light, d.text, d.dir, d.moving, d.doorOpen);
                 String s = status(d);
                 long dayTime = Minecraft.getInstance().level == null ? 0 : Minecraft.getInstance().level.getDayTime() % 24000;
                 int hh = (int) ((dayTime / 1000 + 6) % 24), mm = (int) (dayTime % 1000 * 60 / 1000);
@@ -196,7 +203,7 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
         boolean isInd = k == DeviceBlock.Kind.IND_SEGMENT || k == DeviceBlock.Kind.IND_DOT || k == DeviceBlock.Kind.IND_LCD || k == DeviceBlock.Kind.IND_LAMP;
         if (linked && (pp.display != null || isInd)) {
             float[] r = pp.display != null ? pp.display : new float[]{0.08f, 0.15f, 0.92f, 0.85f};
-            PanelDraw.display(ps, buf, d.profile(), d.getBlockPos(), pp.dispType, pp.digit, pp.lcdBg, -w / 2 + r[0] * w, by + r[1] * h, -w / 2 + r[2] * w, by + r[3] * h, z, light, d.text, d.dir, d.moving);
+            PanelDraw.display(ps, buf, d.profile(), d.getBlockPos(), pp.dispType, pp.digit, pp.lcdBg, -w / 2 + r[0] * w, by + r[1] * h, -w / 2 + r[2] * w, by + r[3] * h, z, light, d.text, d.dir, d.moving, d.doorOpen);
         }
         // 호출 버튼: 찾은 버튼 중 위 = 상승, 아래 = 하강
         if (k == DeviceBlock.Kind.HALL_BUTTON || k == DeviceBlock.Kind.HALL_PANEL) {

@@ -24,6 +24,18 @@ public class DeviceBlockEntity extends BlockEntity {
     // 제어반이 밀어주는 표시 정보
     public String text = "", status = "", letter = "", floorName = "";
     public int dir;
+    /** 카 문이 열리는 중/열려 있음 (문열림 화살표용) */
+    public boolean doorOpen;
+    /** 장치 크기 (%, 가로·세로) */
+    public int sizeW = 100, sizeH = 100;
+
+    public void setSize(int w, int h) {
+        sizeW = Math.max(50, Math.min(250, w)); sizeH = Math.max(50, Math.min(250, h));
+        sync();
+    }
+
+    public void setDoorOpen(boolean o) { if (o != doorOpen) { doorOpen = o; hash = 0; } }
+
     public boolean moving, lanUp, lanDown, lanAny, upLit, downLit, hasUp = true, hasDown = true, dumbwaiter;
     public final List<String> names = new ArrayList<>();
     public boolean redstoneLast;
@@ -166,7 +178,8 @@ public class DeviceBlockEntity extends BlockEntity {
         t.putString("fn", floorName);
         t.putInt("dir", dir);
         int flags = (moving ? 1 : 0) | (lanUp ? 2 : 0) | (lanDown ? 4 : 0) | (lanAny ? 8 : 0) | (upLit ? 16 : 0) | (downLit ? 32 : 0)
-                | (hasUp ? 64 : 0) | (hasDown ? 128 : 0) | (dumbwaiter ? 256 : 0) | (redstoneLast ? 512 : 0);
+                | (hasUp ? 64 : 0) | (hasDown ? 128 : 0) | (dumbwaiter ? 256 : 0) | (redstoneLast ? 512 : 0) | (doorOpen ? 1024 : 0);
+        t.putInt("sw", sizeW); t.putInt("sh", sizeH);
         t.putInt("fl", flags);
         t.putInt("design", design);
         t.putString("cdes", ctrlDesign); t.putString("csel", customSel);
@@ -193,7 +206,8 @@ public class DeviceBlockEntity extends BlockEntity {
         int f = t.getInt("fl");
         moving = (f & 1) != 0; lanUp = (f & 2) != 0; lanDown = (f & 4) != 0; lanAny = (f & 8) != 0;
         upLit = (f & 16) != 0; downLit = (f & 32) != 0; hasUp = (f & 64) != 0; hasDown = (f & 128) != 0;
-        dumbwaiter = (f & 256) != 0; redstoneLast = (f & 512) != 0;
+        dumbwaiter = (f & 256) != 0; redstoneLast = (f & 512) != 0; doorOpen = (f & 1024) != 0;
+        sizeW = t.contains("sw") ? t.getInt("sw") : 100; sizeH = t.contains("sh") ? t.getInt("sh") : 100;
         design = t.getInt("design");
         ctrlDesign = t.getString("cdes"); customSel = t.getString("csel");
         indTag = t.getCompound("ind");

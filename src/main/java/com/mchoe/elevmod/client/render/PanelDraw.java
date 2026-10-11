@@ -24,9 +24,16 @@ public final class PanelDraw {
     public static void display(PoseStack ps, MultiBufferSource buf, @org.jetbrains.annotations.Nullable com.mchoe.elevmod.elevator.IndicatorProfile prof,
                                @org.jetbrains.annotations.Nullable Object key, String type, int col, int bg, float x1, float y1, float x2, float y2,
                                float z, int light, String cur, int dir, boolean moving) {
+        display(ps, buf, prof, key, type, col, bg, x1, y1, x2, y2, z, light, cur, dir, moving, false);
+    }
+
+    /** open = 카 문이 열리는 중·열려 있음 (문열림 애니메이션) */
+    public static void display(PoseStack ps, MultiBufferSource buf, @org.jetbrains.annotations.Nullable com.mchoe.elevmod.elevator.IndicatorProfile prof,
+                               @org.jetbrains.annotations.Nullable Object key, String type, int col, int bg, float x1, float y1, float x2, float y2,
+                               float z, int light, String cur, int dir, boolean moving, boolean open) {
         int base = type.equals("lcd") ? 0xFF7FE3FF : col;
         int b = type.equals("lcd") ? bg : type.equals("dot") ? 0xFF0C0806 : 0xFF140404;
-        com.mchoe.elevmod.client.indicator.IndicatorDraw.draw(ps, buf, prof, type, base, b, x1, y1, x2, y2, z, light, cur, dir, moving, key);
+        com.mchoe.elevmod.client.indicator.IndicatorDraw.draw(ps, buf, prof, type, base, b, x1, y1, x2, y2, z, light, cur, dir, moving, open, key);
     }
 
     /** 사진 앞면 (x0,y0 = 왼쪽 아래, +Z 가 보는 사람 쪽) */
