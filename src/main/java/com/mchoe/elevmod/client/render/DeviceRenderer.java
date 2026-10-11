@@ -138,6 +138,7 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
             }
             case LANTERN -> {
                 boolean up = d.lanUp || d.lanAny, dn = d.lanDown || d.lanAny;
+            if (lanBlinkOff(d)) { up = false; dn = false; }
                 int style = Math.floorMod(des, 3);
                 int green = 0xFF30FF60, red = 0xFFFF3020;
                 if (style == 0) {
@@ -221,11 +222,20 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
         // 홀랜턴 램프
         if (k == DeviceBlock.Kind.LANTERN) {
             boolean up = d.lanUp || d.lanAny, dn = d.lanDown || d.lanAny;
+            if (lanBlinkOff(d)) { up = false; dn = false; }
             float[] ur = pp.lamps.size() > 0 ? pp.lamps.get(0) : new float[]{0.05f, 0.1f, 0.48f, 0.9f};
             float[] dr = pp.lamps.size() > 1 ? pp.lamps.get(1) : new float[]{0.52f, 0.1f, 0.95f, 0.9f};
             if (up) RenderUtil.quadZ(ps, RenderUtil.glass(buf, "white"), -w / 2 + ur[0] * w, by + ur[1] * h, -w / 2 + ur[2] * w, by + ur[3] * h, z, true, RenderUtil.FULL, 0xA030FF60);
             if (dn) RenderUtil.quadZ(ps, RenderUtil.glass(buf, "white"), -w / 2 + dr[0] * w, by + dr[1] * h, -w / 2 + dr[2] * w, by + dr[3] * h, z, true, RenderUtil.FULL, 0xA0FF3020);
         }
+    }
+
+    /** 홀랜턴 깜빡임: 설정한 초마다 켜짐/꺼짐 (꺼진 차례면 true) */
+    private static boolean lanBlinkOff(DeviceBlockEntity d) {
+        com.mchoe.elevmod.elevator.IndicatorProfile p = d.profile();
+        if (!p.lanBlink || Minecraft.getInstance().level == null) return false;
+        float t = (Minecraft.getInstance().level.getGameTime() + Minecraft.getInstance().getFrameTime()) / 20f;
+        return ((int) (t / Math.max(0.05f, p.lanBlinkSec))) % 2 == 1;
     }
 
     private static final int[] SEG_COLORS = {0xFFFF2A10, 0xFF30FF50, 0xFFFF9A10, 0xFF40A8FF};

@@ -17,9 +17,9 @@ public final class ClientHooks {
         if (kind == Net.ScreenMsg.CONTROLLER) {
             if (open) mc.setScreen(new ControllerScreen(pos, data));
             else if (mc.screen instanceof ControllerScreen cs && cs.pos.equals(pos)) cs.update(data);
-            else if (mc.screen instanceof com.mchoe.elevmod.client.screen.IndicatorScreen is && is.pos.equals(pos)) is.update(data);
-            else if (mc.screen instanceof com.mchoe.elevmod.client.screen.DotAnimEditorScreen ae && ae.parent() instanceof com.mchoe.elevmod.client.screen.IndicatorScreen is && is.pos.equals(pos)) is.update(data);
-            else if (mc.screen instanceof com.mchoe.elevmod.client.screen.ColorPickerScreen cp && cp.parent() instanceof com.mchoe.elevmod.client.screen.IndicatorScreen is && is.pos.equals(pos)) is.update(data);
+            else if (mc.screen instanceof com.mchoe.elevmod.client.screen.IndicatorScreen is && is.isController() && is.pos.equals(pos)) is.update(data);
+            else if (mc.screen instanceof com.mchoe.elevmod.client.screen.DotAnimEditorScreen ae && ae.parent() instanceof com.mchoe.elevmod.client.screen.IndicatorScreen is && is.isController() && is.pos.equals(pos)) is.update(data);
+            else if (mc.screen instanceof com.mchoe.elevmod.client.screen.ColorPickerScreen cp && cp.parent() instanceof com.mchoe.elevmod.client.screen.IndicatorScreen is && is.isController() && is.pos.equals(pos)) is.update(data);
         } else if (kind == Net.ScreenMsg.DESTINATION) {
             mc.setScreen(new DestinationScreen(pos, data));
         }
@@ -29,8 +29,20 @@ public final class ClientHooks {
         Minecraft.getInstance().setScreen(new com.mchoe.elevmod.client.screen.DesignStudioScreen(null, null));
     }
 
-    public static void openRotator(net.minecraft.world.InteractionHand hand) {
-        Minecraft.getInstance().setScreen(new com.mchoe.elevmod.client.screen.RotatorScreen(hand));
+    /** 승강장 표시기·홀랜턴 개별 디자인 화면 */
+    public static boolean openDeviceIndicator(BlockPos pos) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || !(mc.level.getBlockState(pos).getBlock() instanceof com.mchoe.elevmod.block.DeviceBlock db)) return false;
+        String kind = switch (db.kind) {
+            case IND_DOT -> "dot";
+            case IND_LCD -> "lcd";
+            case IND_SEGMENT, HALL_PANEL -> "seg";
+            case LANTERN -> "lantern";
+            default -> null;
+        };
+        if (kind == null) return false;
+        mc.setScreen(com.mchoe.elevmod.client.screen.IndicatorScreen.forDevice(pos, kind.equals("lantern"), kind.equals("lantern") ? "seg" : kind));
+        return true;
     }
 
     public static void openOffset(BlockPos pos) {

@@ -3,7 +3,7 @@ package com.mchoe.elevmod.elevator;
 import net.minecraft.nbt.CompoundTag;
 
 /**
- * 층표시기(인디케이터) 동작·모양 설정 – 제어반마다 하나, 카 표시기와 승강장 표시기에 모두 적용.
+ * 층표시기(인디케이터) 동작·모양 설정 – 제어반 기본값 + 표시기마다 개별 설정(승강장 표시기, 카 문 위 표시기, 운전반 표시창).
  * 색 값 0 = 장치/의장 기본색 사용.
  */
 public final class IndicatorProfile {
@@ -39,6 +39,19 @@ public final class IndicatorProfile {
     public int lcdFg, lcdArrow, lcdBg;
     // ---------------------------------------------------------------- 애니메이션 (애니메이션 라이브러리 id, "" = 기본 화살표)
     public String animUp = "", animDown = "", animIdle = "";
+    // ---------------------------------------------------------------- 배치: 세로(화살표 위, 숫자 아래) / 화살표 칸 높이(%)
+    public boolean vertical = false;
+    public int arrowH = 40;
+    // ---------------------------------------------------------------- 소자 조합: 숫자·화살표를 각각 다른 소자로 (0 = 표시기 기본, 1 도트, 2 세그먼트, 3 LCD)
+    public static final String[] ELEM = {"auto", "dot", "seg", "lcd"};
+    public int numKind = 0, arrowKind = 0;
+    // ---------------------------------------------------------------- 도트 번갈아 표시: 한 칸에서 화살표 ↔ 숫자를 번갈아 (영상처럼), 전환 효과
+    public boolean altMode = false;
+    public float altArrowSec = 1f, altNumSec = 1.5f, altTransSec = 0.35f;
+    public int altTrans = 0, altTransDir = 1;
+    // ---------------------------------------------------------------- 홀랜턴 깜빡임
+    public boolean lanBlink = false;
+    public float lanBlinkSec = 0.5f;
 
     public CompoundTag save() {
         CompoundTag t = new CompoundTag();
@@ -52,6 +65,10 @@ public final class IndicatorProfile {
         t.putInt("son", segOn); t.putInt("soff", segOff); t.putInt("sbg", segBg);
         t.putInt("lf", lcdFg); t.putInt("la", lcdArrow); t.putInt("lb", lcdBg);
         t.putString("au", animUp); t.putString("ad", animDown); t.putString("ai", animIdle);
+        t.putBoolean("vt", vertical); t.putInt("ah", arrowH); t.putInt("nk", numKind); t.putInt("ak", arrowKind);
+        t.putBoolean("alt", altMode); t.putFloat("aas", altArrowSec); t.putFloat("ans", altNumSec); t.putFloat("ats", altTransSec);
+        t.putInt("atr", altTrans); t.putInt("atd", altTransDir);
+        t.putBoolean("lbk", lanBlink); t.putFloat("lbs", lanBlinkSec);
         return t;
     }
 
@@ -73,6 +90,13 @@ public final class IndicatorProfile {
         p.segOn = t.getInt("son"); p.segOff = t.getInt("soff"); p.segBg = t.getInt("sbg");
         p.lcdFg = t.getInt("lf"); p.lcdArrow = t.getInt("la"); p.lcdBg = t.getInt("lb");
         p.animUp = t.getString("au"); p.animDown = t.getString("ad"); p.animIdle = t.getString("ai");
+        p.vertical = t.getBoolean("vt"); p.arrowH = t.contains("ah") ? t.getInt("ah") : 40;
+        p.numKind = clamp(t.getInt("nk"), 0, 3); p.arrowKind = clamp(t.getInt("ak"), 0, 3);
+        p.altMode = t.getBoolean("alt");
+        p.altArrowSec = t.contains("aas") ? t.getFloat("aas") : 1f; p.altNumSec = t.contains("ans") ? t.getFloat("ans") : 1.5f;
+        p.altTransSec = t.contains("ats") ? t.getFloat("ats") : 0.35f;
+        p.altTrans = t.contains("atr") ? clamp(t.getInt("atr"), 0, TRANS.length - 1) : 0; p.altTransDir = t.contains("atd") ? clamp(t.getInt("atd"), 0, 4) : 1;
+        p.lanBlink = t.getBoolean("lbk"); p.lanBlinkSec = t.contains("lbs") ? t.getFloat("lbs") : 0.5f;
         return p;
     }
 
@@ -91,6 +115,18 @@ public final class IndicatorProfile {
             case "openarrow" -> openArrow = !openArrow;
             case "dotfont" -> dotFont = text;
             case "animOpen" -> animOpen = text;
+            case "vertical" -> vertical = !vertical;
+            case "arrowh" -> arrowH = (int) num(text, arrowH, 10, 80);
+            case "numkind" -> numKind = Math.floorMod(numKind + delta, ELEM.length);
+            case "arrowkind" -> arrowKind = Math.floorMod(arrowKind + delta, ELEM.length);
+            case "altmode" -> altMode = !altMode;
+            case "altarrowsec" -> altArrowSec = num(text, altArrowSec, 0.1f, 30f);
+            case "altnumsec" -> altNumSec = num(text, altNumSec, 0.1f, 30f);
+            case "alttranssec" -> altTransSec = num(text, altTransSec, 0f, 5f);
+            case "alttrans" -> altTrans = Math.floorMod(altTrans + delta, TRANS.length);
+            case "alttransdir" -> altTransDir = Math.floorMod(altTransDir + delta, TRANS_DIR.length);
+            case "lanblink" -> lanBlink = !lanBlink;
+            case "lanblinksec" -> lanBlinkSec = num(text, lanBlinkSec, 0.05f, 10f);
             case "arroww" -> arrowW = (int) num(text, arrowW, 0, 60);
             case "numx" -> numX = (int) num(text, numX, -50, 50);
             case "numy" -> numY = (int) num(text, numY, -50, 50);
@@ -124,7 +160,7 @@ public final class IndicatorProfile {
         }
     }
 
-    static float num(String t, float def, float lo, float hi) {
+    public static float num(String t, float def, float lo, float hi) {
         try { return Math.max(lo, Math.min(hi, Float.parseFloat(t.trim().replace(",", ".")))); } catch (Exception e) { return def; }
     }
 

@@ -26,7 +26,7 @@ import java.util.function.Supplier;
 public final class Net {
     private Net() {}
 
-    private static final String VER = "6";
+    private static final String VER = "7";
     public static final SimpleChannel CH = NetworkRegistry.newSimpleChannel(new ResourceLocation(ElevMod.MODID, "main"), () -> VER, VER::equals, VER::equals);
 
     public static void init() {
@@ -45,7 +45,8 @@ public final class Net {
         DesignNet.register(next);
         AnimNet.register(next);
         RotateMsg.register(next);
-        GroupRotateMsg.register(next);
+        CH.messageBuilder(DevIndMsg.class, next[0]++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(DevIndMsg::encode).decoder(DevIndMsg::decode).consumerMainThread(DevIndMsg::handle).add();
     }
 
     public static void sendController(ServerPlayer p, ControllerBlockEntity c, boolean open) {
@@ -82,6 +83,18 @@ public final class Net {
 
     public static final java.util.Set<String> LAYOUT_KEYS = java.util.Set.of("indx", "indy", "indw", "indh", "copdx", "copdy", "copdw", "copdh", "layout_reset");
 
+    /** 승강장 표시기 개별 디자인 바꾸기 */
+    public record DevIndMsg(BlockPos pos, String key, int delta, String text) {
+        public void encode(FriendlyByteBuf b) { b.writeBlockPos(pos); b.writeUtf(key, 64); b.writeVarInt(delta); b.writeUtf(text, 64); }
+        public static DevIndMsg decode(FriendlyByteBuf b) { return new DevIndMsg(b.readBlockPos(), b.readUtf(64), b.readVarInt(), b.readUtf(64)); }
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer p = ctx.get().getSender();
+            if (p == null || !p.level().isLoaded(pos)) return;
+            if (p.position().distanceTo(Vec3.atCenterOf(pos)) > 12) return;
+            if (p.level().getBlockEntity(pos) instanceof DeviceBlockEntity d) d.editInd(key, delta, text);
+        }
+    }
+
     public record EditMsg(BlockPos ctrl, String key, int delta, String text) {
         public void encode(FriendlyByteBuf b) { b.writeBlockPos(ctrl); b.writeUtf(key, 64); b.writeVarInt(delta); b.writeUtf(text, 64); }
         public static EditMsg decode(FriendlyByteBuf b) { return new EditMsg(b.readBlockPos(), b.readUtf(64), b.readVarInt(), b.readUtf(64)); }
@@ -91,7 +104,7 @@ public final class Net {
             if (!(p.level().getBlockEntity(ctrl) instanceof ControllerBlockEntity c)) return;
             boolean near = p.position().distanceTo(Vec3.atCenterOf(ctrl)) <= 10;
             // 카 안 표시기 배치는 카 안(디자인 변경기 위치 조정 모드)에서도 바꿀 수 있음
-            boolean layout = LAYOUT_KEYS.contains(key) && !c.floors.isEmpty() && p.position().distanceTo(c.carPos()) <= 24;
+            boolean layout = (LAYOUT_KEYS.contains(key) || key.startsWith("indT.") || key.startsWith("indC.")) && !c.floors.isEmpty() && p.position().distanceTo(c.carPos()) <= 24;
             if (near || layout) c.edit(p, key, delta, text);
         }
     }

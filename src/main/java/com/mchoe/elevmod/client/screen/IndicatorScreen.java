@@ -31,7 +31,72 @@ public class IndicatorScreen extends Screen {
     private final Screen parent;
     private CompoundTag data;
     private int page = 0, previewKind = 0;
-    private static final String[] PAGES = {"elevmod.ind.page.trans", "elevmod.ind.page.shape", "elevmod.ind.page.color", "elevmod.ind.page.anim", "elevmod.ind.page.behavior", "elevmod.ind.page.celllayout"};
+    private static final String[] PAGES = {"elevmod.ind.page.trans", "elevmod.ind.page.shape", "elevmod.ind.page.color", "elevmod.ind.page.anim", "elevmod.ind.page.behavior", "elevmod.ind.page.celllayout", "elevmod.ind.page.alt"};
+
+    /**
+     * 무엇의 디자인을 바꾸는지: 제어반(기본값) / 승강장 표시기 하나 / 카 문 위 표시기 / 운전반 표시창.
+     * 개별 디자인은 처음 바꿀 때 제어반 설정을 복사해 시작하고, "제어반 설정 따르기" 로 되돌린다.
+     */
+    private int target = 0;          // 0 제어반, 1 승강장 장치, 2 카 문 위 표시기, 3 운전반 표시창
+    private com.mchoe.elevmod.entity.ElevatorCarEntity car;
+    private boolean lantern;
+    private CompoundTag seenTag;
+
+    /** 승강장 표시기·홀랜턴 하나의 개별 디자인 */
+    public static IndicatorScreen forDevice(BlockPos devicePos, boolean lantern, String kind) {
+        IndicatorScreen s = new IndicatorScreen(devicePos, null, new CompoundTag());
+        s.target = 1;
+        s.lantern = lantern;
+        s.previewKind = Math.max(0, java.util.Arrays.asList(KINDS).indexOf(kind));
+        if (lantern) s.page = 4;
+        return s;
+    }
+
+    /** 카 안 표시기(part 2 = 문 위, 3 = 운전반 표시창)의 개별 디자인 */
+    public static IndicatorScreen forCar(com.mchoe.elevmod.entity.ElevatorCarEntity car, int part) {
+        IndicatorScreen s = new IndicatorScreen(car.controller(), null, new CompoundTag());
+        s.target = part;
+        s.car = car;
+        int disp = car.state().getInt("disp");
+        s.previewKind = disp == 1 ? 1 : disp == 2 ? 2 : 0;
+        return s;
+    }
+
+    public boolean isController() { return target == 0; }
+
+    /** 지금 보여 줄 설정 태그 */
+    private CompoundTag tag() {
+        switch (target) {
+            case 1 -> {
+                if (minecraft != null && minecraft.level != null && minecraft.level.getBlockEntity(pos) instanceof com.mchoe.elevmod.block.DeviceBlockEntity d)
+                    return d.ownInd.isEmpty() ? d.indTag : d.ownInd;
+                return new CompoundTag();
+            }
+            case 2, 3 -> {
+                CompoundTag st = car.state();
+                String k = target == 2 ? "indT" : "indC";
+                return st.contains(k) ? st.getCompound(k) : st.getCompound("ind");
+            }
+            default -> { return data.getCompound("ind"); }
+        }
+    }
+
+    /** 개별 디자인을 쓰는 중인지 */
+    private boolean own() {
+        if (target == 1) return minecraft != null && minecraft.level != null && minecraft.level.getBlockEntity(pos) instanceof com.mchoe.elevmod.block.DeviceBlockEntity d && !d.ownInd.isEmpty();
+        if (target >= 2) return car.state().contains(target == 2 ? "indT" : "indC");
+        return false;
+    }
+
+    /** 표시기 설정 한 항목 보내기 (field = 항목 이름) */
+    private void sendInd(String field, int delta, String text) {
+        switch (target) {
+            case 1 -> Net.CH.sendToServer(new Net.DevIndMsg(pos, field, delta, text));
+            case 2 -> Net.CH.sendToServer(new Net.EditMsg(pos, "indT." + field, delta, text));
+            case 3 -> Net.CH.sendToServer(new Net.EditMsg(pos, "indC." + field, delta, text));
+            default -> Net.CH.sendToServer(new Net.EditMsg(pos, "ind." + field, delta, text));
+        }
+    }
     private static final String[] KINDS = {"seg", "dot", "lcd"};
     private final List<Label> labels = new ArrayList<>();
     private final Map<String, EditBox> boxes = new HashMap<>();
@@ -59,9 +124,28 @@ public class IndicatorScreen extends Screen {
 
     public void page(int p) { page = p; }
 
-    private IndicatorProfile prof() { return IndicatorProfile.load(data.getCompound("ind")); }
+    @Override
+    public void tick() {
+        // 개별 디자인은 블록·카 상태가 바뀌면 다시 그림 (입력 중인 칸은 유지)
+        if (target != 0 && tag() != seenTag) refresh();
+    }
 
-    private void edit(String key, int delta, String text) { Net.CH.sendToServer(new Net.EditMsg(pos, key, delta, text)); }
+    private void refresh() {
+        Map<String, String> keep = new HashMap<>();
+        String focused = null;
+        for (Map.Entry<String, EditBox> e : boxes.entrySet()) if (e.getValue().isFocused()) { keep.put(e.getKey(), e.getValue().getValue()); focused = e.getKey(); }
+        rebuildWidgets();
+        for (Map.Entry<String, String> e : keep.entrySet()) if (boxes.containsKey(e.getKey())) boxes.get(e.getKey()).setValue(e.getValue());
+        if (focused != null && boxes.containsKey(focused)) { setFocused(boxes.get(focused)); boxes.get(focused).setFocused(true); }
+    }
+
+    private IndicatorProfile prof() { return IndicatorProfile.load(tag()); }
+
+    /** "ind.항목" 이면 대상의 표시기 설정, 그 밖은 제어반 설정 */
+    private void edit(String key, int delta, String text) {
+        if (key.startsWith("ind.")) sendInd(key.substring(4), delta, text);
+        else Net.CH.sendToServer(new Net.EditMsg(pos, key, delta, text));
+    }
 
     private int left() { return width / 2 - 175; }
 
@@ -74,11 +158,20 @@ public class IndicatorScreen extends Screen {
         int left = left(), top = 28;
         for (int i = 0; i < PAGES.length; i++) {
             final int pi = i;
-            addRenderableWidget(Button.builder(Component.translatable(PAGES[i]).withStyle(i == page ? ChatFormatting.YELLOW : ChatFormatting.WHITE), b -> { page = pi; rebuildWidgets(); })
-                    .bounds(left + i * 58, top, 57, 18).build());
+            if (i == 4 && target != 0 && !lantern) continue;   // 동작 페이지: 제어반(전체)과 홀랜턴만
+            addRenderableWidget(Button.builder(Component.translatable(i == 4 && target != 0 ? "elevmod.ind.page.lantern" : PAGES[i]).withStyle(i == page ? ChatFormatting.YELLOW : ChatFormatting.WHITE), b -> { page = pi; rebuildWidgets(); })
+                    .bounds(left + i * 50, top, 49, 18).build());
         }
+        if (page == 4 && target != 0 && !lantern) page = 0;
         IndicatorProfile p = prof();
+        seenTag = tag();
         int y = top + 26;
+        if (target != 0) {
+            // 개별 디자인 / 제어반 설정 따름
+            labels.add(new Label(I18n.get(own() ? "elevmod.ind.own_on" : "elevmod.ind.own_off"), left, height - 50));
+            addRenderableWidget(Button.builder(Component.translatable("elevmod.ind.follow"), b -> sendInd("follow", 0, ""))
+                    .bounds(left + 200, height - 56, 140, 20).build());
+        }
         switch (page) {
             case 0 -> {
                 y = cycle(y, "ind.trans", "elevmod.ind.trans", Component.translatable("elevmod.trans." + IndicatorProfile.TRANS[p.trans]));
@@ -127,6 +220,9 @@ public class IndicatorScreen extends Screen {
                 labels.add(new Label(I18n.get("elevmod.ind.anim_hint"), left, y + 30));
             }
             case 4 -> {
+                y = cycle(y, "ind.lanblink", "elevmod.ind.lanblink", Component.translatable(p.lanBlink ? "elevmod.on" : "elevmod.off"));
+                if (p.lanBlink) y = typed(y, "ind.lanblinksec", "elevmod.ind.lanblinksec", f1(p.lanBlinkSec), "elevmod.unit.sec");
+                if (target != 0) break;
                 y = typed(y, "doordelay", "elevmod.ind.doordelay", f1(data.getFloat("doorDelay")), "elevmod.unit.sec");
                 y = cycle(y, "hallcancel", "elevmod.ind.hallcancel", Component.translatable(data.getBoolean("hallCancel") ? "elevmod.on" : "elevmod.off"));
                 if (data.getBoolean("hallCancel")) y = typed(y, "hallcancelN", "elevmod.ind.cancelN", String.valueOf(data.getInt("hallCancelN")), "elevmod.unit.times");
@@ -140,13 +236,27 @@ public class IndicatorScreen extends Screen {
                 y = typed(y, "ind.numx", "elevmod.ind.numx", String.valueOf(p.numX), "elevmod.unit.pct");
                 y = typed(y, "ind.numy", "elevmod.ind.numy", String.valueOf(p.numY), "elevmod.unit.pct");
                 y = typed(y, "ind.numscale", "elevmod.ind.numscale", String.valueOf(p.numScale), "elevmod.unit.pct");
+                y = cycle(y, "ind.vertical", "elevmod.ind.vertical", Component.translatable(p.vertical ? "elevmod.ind.layout.v" : "elevmod.ind.layout.h"));
+                if (p.vertical) y = typed(y, "ind.arrowh", "elevmod.ind.arrowh", String.valueOf(p.arrowH), "elevmod.unit.pct");
+                y = cycle(y, "ind.numkind", "elevmod.ind.numkind", Component.translatable("elevmod.elem." + IndicatorProfile.ELEM[p.numKind]));
+                y = cycle(y, "ind.arrowkind", "elevmod.ind.arrowkind", Component.translatable("elevmod.elem." + IndicatorProfile.ELEM[p.arrowKind]));
                 labels.add(new Label(I18n.get("elevmod.ind.cell_hint"), left, y + 6));
+            }
+            case 6 -> {
+                // 번갈아 표시: 한 칸에서 화살표 ↔ 숫자 (도트는 도트 단위로 밀리며 전환)
+                y = cycle(y, "ind.altmode", "elevmod.ind.altmode", Component.translatable(p.altMode ? "elevmod.on" : "elevmod.off"));
+                y = typed(y, "ind.altarrowsec", "elevmod.ind.altarrowsec", f1(p.altArrowSec), "elevmod.unit.sec");
+                y = typed(y, "ind.altnumsec", "elevmod.ind.altnumsec", f1(p.altNumSec), "elevmod.unit.sec");
+                y = cycle(y, "ind.alttrans", "elevmod.ind.alttrans", Component.translatable("elevmod.trans." + IndicatorProfile.TRANS[p.altTrans]));
+                y = cycle(y, "ind.alttransdir", "elevmod.ind.alttransdir", Component.translatable("elevmod.transdir." + IndicatorProfile.TRANS_DIR[p.altTransDir]));
+                y = typed(y, "ind.alttranssec", "elevmod.ind.alttranssec", f1(p.altTransSec), "elevmod.unit.sec");
+                labels.add(new Label(I18n.get("elevmod.ind.alt_hint"), left, y + 6));
             }
             default -> {}
         }
         // 미리보기 종류
         addRenderableWidget(Button.builder(Component.translatable("elevmod.ind.preview." + KINDS[previewKind]), b -> { previewKind = (previewKind + 1) % KINDS.length; rebuildWidgets(); })
-                .bounds(left + 262, top + 26 + 78, 88, 18).build());
+                .bounds(left + 262, top + 26 + 92, 88, 18).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose()).bounds(width / 2 - 40, height - 26, 80, 20).build());
     }
 
@@ -218,10 +328,12 @@ public class IndicatorScreen extends Screen {
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
         renderBackground(g);
-        g.drawCenteredString(font, title, width / 2, 12, 0xFFFFFF);
+        String tt = switch (target) { case 1 -> I18n.get(lantern ? "elevmod.ind.title.lantern" : "elevmod.ind.title.device"); case 2 -> I18n.get("elevmod.ind.title.transom"); case 3 -> I18n.get("elevmod.ind.title.cop"); default -> title.getString(); };
+        g.drawCenteredString(font, tt, width / 2, 12, 0xFFFFFF);
         for (Label l : labels) g.drawString(font, l.text(), l.x(), l.y(), 0xFFDDDDDD, false);
         super.render(g, mx, my, pt);
-        renderPreview(g, left() + 262, 54, 88, 72);
+        if (prof().vertical) renderPreview(g, left() + 280, 54, 52, 84);
+        else renderPreview(g, left() + 262, 54, 88, 72);
     }
 
     /** 미리보기: 1→5→1 층을 오가는 모습 */

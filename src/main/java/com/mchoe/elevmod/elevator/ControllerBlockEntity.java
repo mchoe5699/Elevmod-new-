@@ -109,6 +109,8 @@ public class ControllerBlockEntity extends BlockEntity {
     }
     /** 층표시기 동작·모양·색 설정 */
     public IndicatorProfile ind = new IndicatorProfile();
+    /** 카 안 개별 디자인: 문 위 표시기 / 운전반 표시창 (비어 있으면 제어반 설정을 따름) */
+    public CompoundTag indCar = new CompoundTag(), indCop = new CompoundTag();
     /** 도착 후 문이 열리기 시작할 때까지(초) */
     public float doorDelay = 0;
     /** 호출 취소: 켜진 버튼을 몇 번 눌러야 취소되는지 (사용 안 함이면 취소 불가) */
@@ -142,6 +144,19 @@ public class ControllerBlockEntity extends BlockEntity {
      * 도착 시 = 도착하는 순간 다음 방향으로, 도착 전 = 도착 N초 전에, 도착 후 = 도착하고 N초 뒤에.
      */
     public int displayDir() {
+        int d = displayDirRaw();
+        return state == State.MOVING ? d : terminal(d);
+    }
+
+    /** 끝층(최상층·최하층)에서는 그 너머로 갈 수 없으므로 화살표를 반대로 */
+    private int terminal(int d) {
+        if (floors.isEmpty() || cur < 0) return d;
+        if (cur >= floors.size() - 1 && d > 0) return -1;
+        if (cur == 0 && d < 0) return 1;
+        return d;
+    }
+
+    private int displayDirRaw() {
         boolean mv = state == State.MOVING && target >= 0 && target < floorS.length;
         if (mv) {
             int travel = floorS[target] > s ? 1 : -1;
@@ -1132,6 +1147,8 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putInt("cur", floors.isEmpty() ? 0 : nearestIdx(s));
         t.putInt("dir", displayDir());
         t.putBoolean("mv", state == State.MOVING);
+        if (!indCar.isEmpty()) t.put("indT", indCar);
+        if (!indCop.isEmpty()) t.put("indC", indCop);
         if (carYaw != 0) t.putFloat("gy", carYaw);
         t.putBoolean("dop", (state == State.OPENING || state == State.OPEN) && doorPos > 0);
         t.put("ind", indTag());
@@ -1222,6 +1239,7 @@ public class ControllerBlockEntity extends BlockEntity {
         lastPush = h;
         List<ControllerBlockEntity> grp = members(lvl);
         int ddir = displayDir();
+        int ldir = terminal(dir);   // 홀랜턴: 끝층에서는 반대 방향
         for (BlockPos p : devices) {
             if (!lvl.isLoaded(p)) continue;
             if (!(lvl.getBlockEntity(p) instanceof DeviceBlockEntity d)) continue;
@@ -1244,7 +1262,7 @@ public class ControllerBlockEntity extends BlockEntity {
             boolean here = fi >= 0 && fi == cur && doorsOpen;
             d.setIndTag(indTag());
             d.setDoorOpen(doorsOpen && doorPos > 0);
-            d.applyDisplay(text, ddir, statusKey(), state == State.MOVING, here && dir > 0, here && dir < 0, here && dir == 0,
+            d.applyDisplay(text, ddir, statusKey(), state == State.MOVING, here && ldir > 0, here && ldir < 0, here && ldir == 0,
                     up, down, hasUp, hasDown, String.valueOf(letter()), usage == Spec.Usage.DUMBWAITER, floors.get(Math.max(0, fi)).name, namesList());
         }
         float speed = (float) v;
@@ -1781,8 +1799,11 @@ public class ControllerBlockEntity extends BlockEntity {
         return best;
     }
 
-    public void linkDevice(DeviceBlockEntity d, Player p) {
-        int fy = nearestFloorY(d.getBlockPos().getY());
+    public void linkDevice(DeviceBlockEntity d, Player p) { linkDevice(d, p, Integer.MIN_VALUE); }
+
+    /** doorFloorY = 링커로 먼저 누른 승강장 문의 층 (없으면 가장 가까운 층) */
+    public void linkDevice(DeviceBlockEntity d, Player p, int doorFloorY) {
+        int fy = doorFloorY != Integer.MIN_VALUE && idxOfY(doorFloorY) >= 0 ? doorFloorY : nearestFloorY(d.getBlockPos().getY());
         if (fy == Integer.MIN_VALUE) { p.displayClientMessage(Component.translatable("elevmod.msg.need_floor").withStyle(ChatFormatting.RED), false); return; }
         d.link(worldPosition, fy);
         devices.add(d.getBlockPos());
@@ -1858,6 +1879,19 @@ public class ControllerBlockEntity extends BlockEntity {
     public void edit(ServerPlayer p, String key, int delta, String text) {
         if (!(level instanceof ServerLevel lvl)) return;
         if (key.startsWith("ind.")) { ind.edit(key.substring(4), delta, text); indTagCache = null; key = ""; }
+        else if (key.startsWith("indT.") || key.startsWith("indC.")) {
+            boolean car = key.startsWith("indT.");
+            String f = key.substring(5);
+            CompoundTag own = car ? indCar : indCop;
+            if (f.equals("follow")) own = new CompoundTag();
+            else {
+                IndicatorProfile pr = IndicatorProfile.load(own.isEmpty() ? ind.save() : own);
+                pr.edit(f, delta, text);
+                own = pr.save();
+            }
+            if (car) indCar = own; else indCop = own;
+            key = "";
+        }
         switch (key) {
             case "usage" -> {
                 Spec.Usage old = usage;
@@ -2153,6 +2187,7 @@ public class ControllerBlockEntity extends BlockEntity {
         t.putBoolean("ddCopButtons", ddCopButtons);
         t.putInt("windowMask", windowMask); t.putInt("windowSide", windowSide);
         t.put("ind", ind.save());
+        t.put("indCar", indCar); t.put("indCop", indCop);
         t.putFloat("doorDelay", doorDelay);
         t.putBoolean("hallCancel", hallCancel); t.putInt("hallCancelN", hallCancelN);
         t.putBoolean("carCancel", carCancel); t.putInt("carCancelN", carCancelN);
@@ -2214,6 +2249,7 @@ public class ControllerBlockEntity extends BlockEntity {
         windowMask = t.contains("windowMask") ? t.getInt("windowMask") : -1;
         windowSide = t.getInt("windowSide");
         ind = IndicatorProfile.load(t.getCompound("ind"));
+        indCar = t.getCompound("indCar"); indCop = t.getCompound("indCop");
         indTagCache = null;
         doorDelay = t.getFloat("doorDelay");
         hallCancel = t.getBoolean("hallCancel"); hallCancelN = t.contains("hallCancelN") ? t.getInt("hallCancelN") : 2;
@@ -2292,8 +2328,9 @@ public class ControllerBlockEntity extends BlockEntity {
     public void load(CompoundTag t) {
         super.load(t);
         yaw = t.getFloat("yaw");
-        carYaw = t.getFloat("carYaw"); carPivX = t.getDouble("carPivX"); carPivZ = t.getDouble("carPivZ");
-        pivX = t.contains("pvx") ? t.getDouble("pvx") : Double.NaN; pivZ = t.contains("pvz") ? t.getDouble("pvz") : Double.NaN;
+        carYaw = 0;   // 회전기 삭제: 카 회전 없음
+        pivX = Double.NaN; pivZ = Double.NaN;
+        if (t.contains("pvx")) yaw = 0;   // 회전기(삭제됨)로 돌린 것은 원래대로
         if (t.contains("settings")) loadSettings(t.getCompound("settings"));
         floors.clear();
         ListTag fl = t.getList("floors", Tag.TAG_COMPOUND);

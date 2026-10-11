@@ -104,6 +104,14 @@ public class DeviceBlock extends BaseEntityBlock {
         boolean fireKeyOnSwitch = kind == Kind.FIRE_SWITCH && player.getItemInHand(hand).is(ModRegistry.FIRE_KEY.get());
         if (player.getItemInHand(hand).getItem() instanceof ElevItem && !fireKeyOnSwitch) return InteractionResult.PASS;
         if (player.getItemInHand(hand).getItem() instanceof com.mchoe.elevmod.item.DesignToolItem) return InteractionResult.PASS;
+        // 웅크리고 빈손 우클릭: 표시기·홀랜턴 개별 디자인 화면
+        boolean design = player.isShiftKeyDown() && player.getItemInHand(hand).isEmpty()
+                && (kind == Kind.IND_SEGMENT || kind == Kind.IND_DOT || kind == Kind.IND_LCD || kind == Kind.LANTERN || kind == Kind.HALL_PANEL);
+        if (design) {
+            if (level.isClientSide) net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,
+                    () -> () -> com.mchoe.elevmod.client.ClientHooks.openDeviceIndicator(pos));
+            return InteractionResult.SUCCESS;
+        }
         if (level.isClientSide) return InteractionResult.SUCCESS;
         if (!(level.getBlockEntity(pos) instanceof DeviceBlockEntity d)) return InteractionResult.PASS;
         ServerLevel sl = (ServerLevel) level;

@@ -67,12 +67,11 @@ public final class IndicatorDraw {
         float t = now();
         St st = state(key, text, dir, t);
         float w = x2 - x1, h = y2 - y1;
-        int on, off, bg;
-        switch (kind) {
-            case "dot" -> { on = IndicatorProfile.or(p.dotOn, baseOn); bg = IndicatorProfile.or(p.dotBg, baseBg); off = IndicatorProfile.or(p.dotOff, Glyphs.dim(on, 0.1f)); }
-            case "lcd" -> { on = IndicatorProfile.or(p.lcdFg, 0xFFFFFFFF); bg = IndicatorProfile.or(p.lcdBg, baseBg); off = IndicatorProfile.or(p.lcdArrow, baseOn); }
-            default -> { on = IndicatorProfile.or(p.segOn, baseOn); bg = IndicatorProfile.or(p.segBg, baseBg); off = IndicatorProfile.or(p.segOff, Glyphs.dim(on, 0.13f)); }
-        }
+        // 소자 조합: 숫자·화살표를 각각 다른 소자(도트/세그먼트/LCD)로
+        String nk = p.numKind == 0 ? kind : IndicatorProfile.ELEM[p.numKind];
+        String ak = p.arrowKind == 0 ? kind : IndicatorProfile.ELEM[p.arrowKind];
+        int[] cb = colors(p, kind, kind, baseOn, baseBg), cn = colors(p, nk, kind, baseOn, baseBg), ca = colors(p, ak, kind, baseOn, baseBg);
+        int bg = cb[2];
         Glyphs.rect(ps, buf, x1, y1, x2, y2, z, RenderUtil.FULL, bg);
         float zz = z + 0.0004f;
         // 애니메이션 고르기
@@ -86,39 +85,58 @@ public final class IndicatorDraw {
         boolean rot = dir < 0;
         boolean still = openAnim == null && dir != 0 && !moving;   // 정차 중이지만 갈 방향이 있음 → 정지 장면
         float animT = st == null ? t : t - st.dirT;
-        if (anim != null && anim.full) {
-            // 표시기 전체를 덮는 애니메이션
-            drawAnim(ps, buf, anim, animT, x1 + w * 0.04f, y1 + h * 0.08f, x2 - w * 0.04f, y2 - h * 0.08f, zz, light, p.dotRound, kind.equals("dot") ? off : Glyphs.dim(on, 0.1f), rot, still);
+        // 번갈아 표시 모드: 한 칸에서 화살표 ↔ 숫자
+        if (p.altMode) {
+            alternate(ps, buf, p, nk, ak, anim, animT, rot, still, x1, y1, x2, y2, zz, light, text, dir, moving, st, t, cn, ca);
             return;
         }
-        // 화살표 칸 / 숫자 칸
-        // 배치: 화살표 칸 폭(%), 숫자 위치·크기(%), 화살표 크기(%)
-        float ax2 = x1 + w * p.arrowW / 100f;
-        float[] num = scaleRect(new float[]{ax2, y1 + h * 0.08f, x2 - w * 0.03f, y2 - h * 0.08f}, p.numScale / 100f, w * p.numX / 100f, h * p.numY / 100f);
-        if (p.arrowW > 0) {
-            float[] ar = scaleRect(new float[]{x1 + w * 0.04f, y1 + h * 0.1f, ax2 - w * 0.02f, y2 - h * 0.1f}, p.arrowScale / 100f, 0, 0);
-            if (anim != null) drawAnim(ps, buf, anim, animT, ar[0], ar[1], ar[2], ar[3], zz, light, p.dotRound, Glyphs.dim(anim.palette[0], 0.1f), rot, still);
-            else {
-                float[] ab = scaleRect(new float[]{x1, y1, ax2, y2}, p.arrowScale / 100f, 0, 0);
-                builtinArrow(ps, buf, p, kind, ab[0], ab[1], ab[2], ab[3], zz, light, on, off, dir, moving, t);
-            }
+        if (anim != null && anim.full) {
+            // 표시기 전체를 덮는 애니메이션
+            drawAnim(ps, buf, anim, animT, x1 + w * 0.04f, y1 + h * 0.08f, x2 - w * 0.04f, y2 - h * 0.08f, zz, light, p.dotRound, ak.equals("dot") ? ca[1] : Glyphs.dim(ca[0], 0.1f), rot, still);
+            return;
         }
-        // 층 숫자 (+ 전환 효과)
+        // 화살표 칸 / 숫자 칸 (가로 배치: 화살표 왼쪽, 세로 배치: 화살표 위)
+        float[] num, arrowR, arrowBox;
+        if (p.vertical) {
+            float ay1 = y2 - h * p.arrowH / 100f;
+            num = scaleRect(new float[]{x1 + w * 0.06f, y1 + h * 0.04f, x2 - w * 0.06f, ay1 - h * 0.02f}, p.numScale / 100f, w * p.numX / 100f, h * p.numY / 100f);
+            arrowR = scaleRect(new float[]{x1 + w * 0.1f, ay1 + h * 0.02f, x2 - w * 0.1f, y2 - h * 0.04f}, p.arrowScale / 100f, 0, 0);
+            arrowBox = scaleRect(new float[]{x1, ay1, x2, y2}, p.arrowScale / 100f, 0, 0);
+        } else {
+            float ax2 = x1 + w * p.arrowW / 100f;
+            num = scaleRect(new float[]{ax2, y1 + h * 0.08f, x2 - w * 0.03f, y2 - h * 0.08f}, p.numScale / 100f, w * p.numX / 100f, h * p.numY / 100f);
+            arrowR = scaleRect(new float[]{x1 + w * 0.04f, y1 + h * 0.1f, ax2 - w * 0.02f, y2 - h * 0.1f}, p.arrowScale / 100f, 0, 0);
+            arrowBox = scaleRect(new float[]{x1, y1, ax2, y2}, p.arrowScale / 100f, 0, 0);
+        }
+        boolean hasArrow = p.vertical ? p.arrowH > 0 : p.arrowW > 0;
+        if (hasArrow) {
+            if (anim != null) drawAnim(ps, buf, anim, animT, arrowR[0], arrowR[1], arrowR[2], arrowR[3], zz, light, p.dotRound, Glyphs.dim(anim.palette[0], 0.1f), rot, still);
+            else builtinArrow(ps, buf, p, ak, arrowBox[0], arrowBox[1], arrowBox[2], arrowBox[3], zz, light, ca[0], ca[1], dir, moving, t);
+        }
+        numberWithTransition(ps, buf, p, nk, text, num, zz, light, cn[0], cn[1], st, t);
+    }
+
+    /** 소자별 {켜진색, 꺼진색, 바탕색}. 표시기 기본 소자와 다른 소자면 그 소자의 기본색 */
+    private static int[] colors(IndicatorProfile p, String k, String deviceKind, int baseOn, int baseBg) {
+        int defOn = k.equals(deviceKind) ? baseOn : switch (k) { case "dot" -> 0xFFFF8A18; case "lcd" -> 0xFF7FE3FF; default -> 0xFFFF2A10; };
+        return switch (k) {
+            case "dot" -> { int on = IndicatorProfile.or(p.dotOn, defOn); yield new int[]{on, IndicatorProfile.or(p.dotOff, Glyphs.dim(on, 0.1f)), IndicatorProfile.or(p.dotBg, baseBg)}; }
+            case "lcd" -> new int[]{IndicatorProfile.or(p.lcdFg, 0xFFFFFFFF), IndicatorProfile.or(p.lcdArrow, defOn), IndicatorProfile.or(p.lcdBg, baseBg)};
+            default -> { int on = IndicatorProfile.or(p.segOn, defOn); yield new int[]{on, IndicatorProfile.or(p.segOff, Glyphs.dim(on, 0.13f)), IndicatorProfile.or(p.segBg, baseBg)}; }
+        };
+    }
+
+    /** 층 숫자 + 층이 바뀔 때 전환 효과 */
+    private static void numberWithTransition(PoseStack ps, MultiBufferSource buf, IndicatorProfile p, String kind, String text, float[] num, float zz, int light,
+                                             int on, int off, @Nullable St st, float t) {
         float prog = st == null || p.trans == 0 ? 1f : Math.max(0, Math.min(1, (t - st.changeT) / Math.max(0.05f, p.transSec)));
         if (prog >= 1 || st == null || st.prev.isEmpty()) { number(ps, buf, p, kind, text, num, 0, 0, null, zz, light, on, off, 1f); return; }
         int d = p.transDir == 0 ? (st.moveDir >= 0 ? 1 : 2) : p.transDir; // 1 위로 2 아래로 3 왼쪽 4 오른쪽
         String type = IndicatorProfile.TRANS[p.trans];
         if (type.equals("scroll") && !kind.equals("lcd")) {
-            float nw = num[2] - num[0], nh = num[3] - num[1];
             float sx = d == 3 ? -1 : d == 4 ? 1 : 0, sy = d == 1 ? 1 : d == 2 ? -1 : 0;
-            if (kind.equals("dot")) {
-                // 도트는 한 줄(칸)씩 밀림
-                number(ps, buf, p, kind, st.prev, num, sx * prog, sy * prog, num, zz, light, on, off, 1f);
-                number(ps, buf, p, kind, text, num, sx * (prog - 1), sy * (prog - 1), num, zz, light, on, off, 1f);
-            } else {
-                number(ps, buf, p, kind, st.prev, num, sx * prog, sy * prog, num, zz, light, on, off, 1f);
-                number(ps, buf, p, kind, text, num, sx * (prog - 1), sy * (prog - 1), num, zz, light, on, off, 1f);
-            }
+            number(ps, buf, p, kind, st.prev, num, sx * prog, sy * prog, num, zz, light, on, off, 1f);
+            number(ps, buf, p, kind, text, num, sx * (prog - 1), sy * (prog - 1), num, zz, light, on, off, 1f);
         } else if (type.equals("blink")) {
             boolean vis = ((int) (prog * 6)) % 2 == 1 || prog >= 1;
             if (vis) number(ps, buf, p, kind, text, num, 0, 0, null, zz, light, on, off, 1f);
@@ -139,6 +157,153 @@ public final class IndicatorDraw {
             if (prog < 0.5f) number(ps, buf, p, kind, st.prev, num, 0, 0, null, zz, light, mix(on, off, prog * 2), off, 1 - prog * 2);
             else number(ps, buf, p, kind, text, num, 0, 0, null, zz, light, mix(off, on, prog * 2 - 1), off, prog * 2 - 1);
         }
+    }
+
+    // ================================================================== 번갈아 표시 (화살표 ↔ 숫자)
+
+    /** 도트 한 장면 (0 = 꺼짐, 그 밖 = 색) */
+    private static final class Grid {
+        final int cols, rows;
+        final int[] c;
+
+        Grid(int cols, int rows) { this.cols = cols; this.rows = rows; c = new int[cols * rows]; }
+
+        int get(int x, int y) { return x < 0 || y < 0 || x >= cols || y >= rows ? 0 : c[y * cols + x]; }
+
+        void set(int x, int y, int v) { if (x >= 0 && y >= 0 && x < cols && y < rows) c[y * cols + x] = v; }
+    }
+
+    /** 층 숫자를 도트 장면으로 (가운데 정렬) */
+    private static Grid textGrid(IndicatorProfile p, String text, int cols, int rows, int on) {
+        Grid g = new Grid(cols, rows);
+        DotAnim font = AnimLibrary.get(p.dotFont);
+        if (font != null && !font.isFont()) font = null;
+        int gc = font != null ? font.cols : p.dotCols, gr = font != null ? font.rows : p.dotRows;
+        int n = Math.max(1, text.length());
+        int total = n * gc + (n - 1);
+        int ox = (cols - total) / 2, oy = (rows - Math.min(rows, gr)) / 2;
+        for (int i = 0; i < text.length(); i++) {
+            String[] bm = Glyphs.dotGlyph(text.charAt(i));
+            DotAnim.Frame fg = font == null ? null : font.glyph(text.charAt(i));
+            if (fg != null) { boolean any = false; for (byte b : fg.dots) if (b != 0) { any = true; break; } if (!any) fg = null; }
+            for (int yy = 0; yy < Math.min(rows, gr); yy++) for (int xx = 0; xx < gc; xx++) {
+                int v = 0;
+                if (fg != null) { int f = font.get(fg, xx, yy); v = f == 0 ? 0 : f == 1 ? on : font.palette[f - 1]; }
+                else if (bm[yy * 7 / gr].charAt(xx * 5 / gc) == '#') v = on;
+                if (v != 0) g.set(ox + i * (gc + 1) + xx, oy + yy, v);
+            }
+        }
+        return g;
+    }
+
+    /** 화살표(또는 화살표 애니메이션)를 도트 장면으로 */
+    private static Grid arrowGrid(IndicatorProfile p, @Nullable DotAnim anim, float animT, boolean rot, boolean still, int cols, int rows, int dir, boolean moving, float t, int on) {
+        Grid g = new Grid(cols, rows);
+        if (anim != null) {
+            DotAnim.Frame f = still ? anim.stopFrame() : anim.frameAt(Math.max(0, animT));
+            if (f == null) return g;
+            int ox = (cols - anim.cols) / 2, oy = (rows - anim.rows) / 2;
+            for (int y = 0; y < anim.rows; y++) for (int x = 0; x < anim.cols; x++) {
+                int v = rot ? anim.get(f, anim.cols - 1 - x, anim.rows - 1 - y) : anim.get(f, x, y);
+                if (v > 0) g.set(ox + x, oy + y, anim.palette[v - 1]);
+            }
+            return g;
+        }
+        if (dir == 0) return g;
+        int ac = Math.min(cols, Math.max(p.dotCols, 5)), ar = rows;
+        int shift = moving ? (int) (t * 9) % ar : 0;
+        String[] bm = Glyphs.dotGlyph(dir > 0 ? '^' : 'v');
+        int ox = (cols - ac) / 2;
+        for (int yy = 0; yy < ar; yy++) for (int xx = 0; xx < ac; xx++) {
+            int src = Math.floorMod(yy + (dir > 0 ? shift : -shift), ar);
+            if (bm[src * 7 / ar].charAt(xx * 5 / ac) == '#') g.set(ox + xx, yy, on);
+        }
+        return g;
+    }
+
+    /** 두 장면 사이 전환 (type = TRANS, d: 1 위 2 아래 3 왼쪽 4 오른쪽) */
+    private static Grid blend(Grid a, Grid b, float prog, String type, int d, int off) {
+        if (prog >= 1 || type.equals("none")) return b;
+        Grid o = new Grid(b.cols, b.rows);
+        int R = b.rows, C = b.cols;
+        for (int y = 0; y < R; y++) for (int x = 0; x < C; x++) {
+            int v;
+            switch (type) {
+                case "scroll" -> {
+                    int kr = Math.round(prog * R), kc = Math.round(prog * C);
+                    v = switch (d) {
+                        case 1 -> y + kr < R ? a.get(x, y + kr) : b.get(x, y + kr - R);          // 위로 밀려 올라감
+                        case 2 -> y - kr >= 0 ? a.get(x, y - kr) : b.get(x, y - kr + R);
+                        case 3 -> x + kc < C ? a.get(x + kc, y) : b.get(x + kc - C, y);
+                        default -> x - kc >= 0 ? a.get(x - kc, y) : b.get(x - kc + C, y);
+                    };
+                }
+                case "wipe" -> {
+                    int kr = Math.round(prog * R), kc = Math.round(prog * C);
+                    boolean nb = switch (d) { case 1 -> y >= R - kr; case 2 -> y < kr; case 3 -> x >= C - kc; default -> x < kc; };
+                    v = nb ? b.get(x, y) : a.get(x, y);
+                }
+                case "blink" -> v = ((int) (prog * 6)) % 2 == 1 ? b.get(x, y) : 0;
+                default -> {   // fade
+                    int av = a.get(x, y), bv = b.get(x, y);
+                    if (prog < 0.5f) v = av == 0 ? 0 : mix(av, off, prog * 2);
+                    else v = bv == 0 ? 0 : mix(off, bv, prog * 2 - 1);
+                }
+            }
+            o.c[y * C + x] = v;
+        }
+        return o;
+    }
+
+    /** 번갈아 표시 모드: 갈 방향이 있으면 화살표(정한 초) → 숫자(정한 초) 를 되풀이, 없으면 숫자만 */
+    private static void alternate(PoseStack ps, MultiBufferSource buf, IndicatorProfile p, String nk, String ak, @Nullable DotAnim anim, float animT,
+                                  boolean rot, boolean still, float x1, float y1, float x2, float y2, float zz, int light, String text, int dir,
+                                  boolean moving, @Nullable St st, float t, int[] cn, int[] ca) {
+        float w = x2 - x1, h = y2 - y1;
+        boolean arrow = dir != 0 || anim != null;
+        float A = Math.max(0.1f, p.altArrowSec), N = Math.max(0.1f, p.altNumSec), ts = Math.max(0, p.altTransSec);
+        float tt = st == null ? t : t - st.dirT;
+        float u = tt % (A + N);
+        boolean inArrow = arrow && u < A;
+        float prog = 1;
+        if (arrow && ts > 0) {
+            float since = inArrow ? u : u - A;
+            if (since < ts && (tt >= A + N || !inArrow)) prog = since / ts;
+        }
+        int d = p.altTransDir == 0 ? (dir >= 0 ? 1 : 2) : p.altTransDir;
+        if (nk.equals("dot")) {
+            // 도트: 한 장면씩 도트 단위로 밀리며 바뀜
+            DotAnim font = AnimLibrary.get(p.dotFont);
+            int rows = font != null && font.isFont() ? font.rows : p.dotRows;
+            if (anim != null) rows = Math.max(rows, anim.rows);
+            float pitch = h * 0.9f / rows;
+            int cols = Math.max(1, (int) Math.floor(w * 0.94f / pitch));
+            Grid numG = textGrid(p, text, cols, rows, cn[0]);
+            // 숫자 칸에서는 층이 바뀔 때 전환 효과도
+            if (st != null && !st.prev.isEmpty() && p.trans != 0) {
+                float np = Math.max(0, Math.min(1, (t - st.changeT) / Math.max(0.05f, p.transSec)));
+                int nd = p.transDir == 0 ? (st.moveDir >= 0 ? 1 : 2) : p.transDir;
+                numG = blend(textGrid(p, st.prev, cols, rows, cn[0]), numG, np, IndicatorProfile.TRANS[p.trans], nd, cn[1]);
+            }
+            Grid out;
+            if (!arrow) out = numG;
+            else {
+                Grid arG = arrowGrid(p, anim, animT, rot, still, cols, rows, dir, moving, t, ca[0]);
+                out = inArrow ? blend(numG, arG, prog, IndicatorProfile.TRANS[p.altTrans], d, cn[1]) : blend(arG, numG, prog, IndicatorProfile.TRANS[p.altTrans], d, cn[1]);
+            }
+            float gx = (x1 + x2) / 2 - cols * pitch / 2, gy = (y1 + y2) / 2 + rows * pitch / 2;
+            for (int y = 0; y < rows; y++) for (int x = 0; x < cols; x++) {
+                int v = out.get(x, y);
+                dot(ps, buf, gx + x * pitch + pitch / 2, gy - y * pitch - pitch / 2, pitch * 0.4f, zz, v != 0, light, v, cn[1], p.dotRound, null);
+            }
+            return;
+        }
+        // 세그먼트·LCD: 장면을 통째로 바꿈 (페이드)
+        float[] full = {x1 + w * 0.05f, y1 + h * 0.08f, x2 - w * 0.05f, y2 - h * 0.08f};
+        if (inArrow) {
+            if (anim != null) drawAnim(ps, buf, anim, animT, full[0], full[1], full[2], full[3], zz, light, p.dotRound, Glyphs.dim(anim.palette[0], 0.1f), rot, still);
+            else builtinArrow(ps, buf, p, ak, x1, y1, x2, y2, zz, light, prog < 1 ? mix(ca[1], ca[0], prog) : ca[0], ca[1], dir, moving, t);
+        } else numberWithTransition(ps, buf, p, nk, text, full, zz, light, prog < 1 ? mix(cn[1], cn[0], prog) : cn[0], cn[1], st, t);
     }
 
     /** 가운데 기준으로 k 배, (dx, dy) 만큼 이동 */

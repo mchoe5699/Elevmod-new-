@@ -184,7 +184,8 @@ public class LandingDoorBlockEntity extends BlockEntity {
     public void load(CompoundTag t) {
         super.load(t);
         yaw = t.getFloat("yaw");
-        pivX = t.contains("pvx") ? t.getDouble("pvx") : Double.NaN; pivZ = t.contains("pvz") ? t.getDouble("pvz") : Double.NaN;
+        pivX = Double.NaN; pivZ = Double.NaN;
+        if (t.contains("pvx")) yaw = 0;   // 회전기(삭제됨)로 돌린 것은 원래대로
         ctrl = t.contains("ctrl") ? BlockPos.of(t.getLong("ctrl")) : null;
         master = !t.contains("master") || t.getBoolean("master");
         col = t.getInt("col"); row = t.getInt("row");

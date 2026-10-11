@@ -61,9 +61,25 @@ public class DeviceBlockEntity extends BlockEntity {
         sync();
     }
 
+    /** 이 표시기만의 개별 디자인 (비어 있으면 제어반 설정을 따름) */
+    public CompoundTag ownInd = new CompoundTag();
+
     public com.mchoe.elevmod.elevator.IndicatorProfile profile() {
-        if (profCache == null || profCacheTag != indTag) { profCache = com.mchoe.elevmod.elevator.IndicatorProfile.load(indTag); profCacheTag = indTag; }
+        CompoundTag t = ownInd.isEmpty() ? indTag : ownInd;
+        if (profCache == null || profCacheTag != t) { profCache = com.mchoe.elevmod.elevator.IndicatorProfile.load(t); profCacheTag = t; }
         return profCache;
+    }
+
+    /** 개별 디자인 바꾸기 (key "follow" = 제어반 설정 따르기) */
+    public void editInd(String key, int delta, String text) {
+        if (key.equals("follow")) ownInd = new CompoundTag();
+        else {
+            com.mchoe.elevmod.elevator.IndicatorProfile pr = com.mchoe.elevmod.elevator.IndicatorProfile.load(ownInd.isEmpty() ? indTag : ownInd);
+            pr.edit(key, delta, text);
+            ownInd = pr.save();
+        }
+        hash = 0;
+        sync();
     }
 
     /** 실제로 쓸 커스텀 디자인 id ("" = 기본 디자인) */
@@ -184,6 +200,7 @@ public class DeviceBlockEntity extends BlockEntity {
         t.putInt("design", design);
         t.putString("cdes", ctrlDesign); t.putString("csel", customSel);
         t.put("ind", indTag);
+        if (!ownInd.isEmpty()) t.put("oind", ownInd);
         t.putInt("offX", offX); t.putInt("offY", offY);
         t.putLong("origin", worldPosition.asLong());
         t.putFloat("yaw", yaw);
@@ -197,7 +214,8 @@ public class DeviceBlockEntity extends BlockEntity {
     public void load(CompoundTag t) {
         super.load(t);
         yaw = t.getFloat("yaw");
-        pivX = t.contains("pvx") ? t.getDouble("pvx") : Double.NaN; pivZ = t.contains("pvz") ? t.getDouble("pvz") : Double.NaN;
+        pivX = Double.NaN; pivZ = Double.NaN;
+        if (t.contains("pvx")) yaw = 0;   // 회전기(삭제됨)로 돌린 것은 원래대로
         ctrl = t.contains("ctrl") ? BlockPos.of(t.getLong("ctrl")) : null;
         floorY = t.getInt("fy");
         text = t.getString("text");
@@ -213,6 +231,7 @@ public class DeviceBlockEntity extends BlockEntity {
         design = t.getInt("design");
         ctrlDesign = t.getString("cdes"); customSel = t.getString("csel");
         indTag = t.getCompound("ind");
+        ownInd = t.getCompound("oind");
         offX = t.getInt("offX"); offY = t.getInt("offY");
         if (t.contains("origin")) {
             BlockPos o = BlockPos.of(t.getLong("origin"));

@@ -90,7 +90,10 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         c.cdAcc = CustomDesigns.get(st.getString("dsg_copAcc"));
         c.cdInd = CustomDesigns.get(st.getString("dsg_indicator"));
         c.car = car;
-        c.ind = profile(car.getId(), st.getCompound("ind"));
+        c.ind = profile(car.getId() + ":", st.getCompound("ind"));
+        // 개별 디자인 (없으면 제어반 설정)
+        c.indT = st.contains("indT") ? profile(car.getId() + ":T", st.getCompound("indT")) : c.ind;
+        c.indC = st.contains("indC") ? profile(car.getId() + ":C", st.getCompound("indC")) : c.ind;
         c.moving = st.getBoolean("mv");
         c.open = st.getBoolean("dop");
 
@@ -108,13 +111,13 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
         Spec.WallFinish wallF; Spec.FloorFinish floorF; Spec.ButtonStyle copSt, accSt; Spec.Display disp;
         boolean lights, emg, glass, right, tenkey, cbtn;
         CustomDesign cd, cdDoor, cdCop, cdAcc, cdInd;
-        com.mchoe.elevmod.elevator.IndicatorProfile ind; boolean moving, open;
+        com.mchoe.elevmod.elevator.IndicatorProfile ind, indT, indC; boolean moving, open;
     }
 
-    private static final java.util.Map<Integer, Object[]> PROFILES = new java.util.HashMap<>();
+    private static final java.util.Map<String, Object[]> PROFILES = new java.util.HashMap<>();
 
     /** 카 상태의 표시기 설정 (바뀔 때만 다시 읽음) */
-    private static com.mchoe.elevmod.elevator.IndicatorProfile profile(int id, CompoundTag t) {
+    private static com.mchoe.elevmod.elevator.IndicatorProfile profile(String id, CompoundTag t) {
         Object[] e = PROFILES.get(id);
         if (e == null || !e[0].equals(t)) {
             if (PROFILES.size() > 256) PROFILES.clear();
@@ -569,7 +572,8 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
     private void indicator(Ctx c, float x1, float y1, float x2, float y2, float z, String cur, int dir, String key) {
         String type = switch (c.disp) { case DOT -> "dot"; case LCD -> "lcd"; default -> "seg"; };
         int col = switch (c.disp) { case DOT -> 0xFFFF8A18; case LCD -> 0xFF7FE3FF; default -> 0xFFFF2A10; };
-        PanelDraw.display(c.ps, c.buf, c.ind, key == null ? null : c.car.getId() + key, type, col, 0xFF0E2E66, x1, y1, x2, y2, z, c.il, cur, dir, c.moving, c.open);
+        com.mchoe.elevmod.elevator.IndicatorProfile pr = key != null && key.startsWith(":tr") ? c.indT : key != null && key.startsWith(":cop") ? c.indC : c.ind;
+        PanelDraw.display(c.ps, c.buf, pr, key == null ? null : c.car.getId() + key, type, col, 0xFF0E2E66, x1, y1, x2, y2, z, c.il, cur, dir, c.moving, c.open);
     }
 
     /**
@@ -586,7 +590,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
             float[] d = pp.display;
             float ddx = c.st.getFloat("cdx") / 100f / pw, ddy = c.st.getFloat("cdy") / 100f / H, ddw = c.st.getFloat("cdw") / 100f / pw, ddh = c.st.getFloat("cdh") / 100f / H;
             d = new float[]{d[0] + ddx - ddw / 2, d[1] + ddy, d[2] + ddx + ddw / 2, d[3] + ddy + ddh};
-            PanelDraw.display(c.ps, c.buf, c.ind, c.car.getId() + ":cc" + pw + y1, pp.dispType, pp.digit, pp.lcdBg, x0 + d[0] * pw, y1 + d[1] * H, x0 + d[2] * pw, y1 + d[3] * H, 0.001f, c.il, cur, c.st.getInt("dir"), c.moving, c.open);
+            PanelDraw.display(c.ps, c.buf, c.indC, c.car.getId() + ":cc" + pw + y1, pp.dispType, pp.digit, pp.lcdBg, x0 + d[0] * pw, y1 + d[1] * H, x0 + d[2] * pw, y1 + d[3] * H, 0.001f, c.il, cur, c.st.getInt("dir"), c.moving, c.open);
         }
         if (!c.cbtn || c.tenkey || pp.buttons.size() < n) return false;
         int[] fl = PanelDraw.assignFloors(pp.buttons, n);
@@ -794,7 +798,7 @@ public class CarRenderer extends EntityRenderer<ElevatorCarEntity> {
             PanelDraw.face(c.ps, c.buf, ip, -ww / 2, b[1], ww, hh, 0.0005f, c.il);
             float zf = (ip.face != null ? ip.face.maxRaise() : 0) + 0.0015f;
             float[] d = ip.display != null ? ip.display : new float[]{0.1f, 0.15f, 0.9f, 0.85f};
-            PanelDraw.display(c.ps, c.buf, c.ind, c.car.getId() + ":tr", ip.dispType, ip.digit, ip.lcdBg, -ww / 2 + d[0] * ww, b[1] + d[1] * hh, -ww / 2 + d[2] * ww, b[1] + d[3] * hh, zf, c.il, cur, c.st.getInt("dir"), c.moving, c.open);
+            PanelDraw.display(c.ps, c.buf, c.indT, c.car.getId() + ":tr", ip.dispType, ip.digit, ip.lcdBg, -ww / 2 + d[0] * ww, b[1] + d[1] * hh, -ww / 2 + d[2] * ww, b[1] + d[3] * hh, zf, c.il, cur, c.st.getInt("dir"), c.moving, c.open);
         } else {
             float hw = (b[3] - b[0]) / 2;
             indicator(c, -hw, b[1], hw, b[4], 0, cur, c.st.getInt("dir"), ":tr");

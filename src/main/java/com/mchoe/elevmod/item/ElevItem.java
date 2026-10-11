@@ -63,21 +63,42 @@ public class ElevItem extends Item {
                         other.linkGroup(sl, c, p);
                     } else {
                         st.getOrCreateTag().putLong("ctrl", pos.asLong());
+                        st.removeTagKey("fy");
                         p.displayClientMessage(Component.translatable("elevmod.msg.ctrl_selected", c.serial).withStyle(ChatFormatting.AQUA), true);
                     }
                     return InteractionResult.SUCCESS;
                 }
                 if (be == null) return InteractionResult.PASS;
+                // 이미 연결된 승강장 문을 먼저 누르면 그 문의 제어반이 선택됨
+                if ((sp == null || !level.isLoaded(sp)) && be instanceof LandingDoorBlockEntity ld0 && !p.isShiftKeyDown()) {
+                    LandingDoorBlockEntity m0 = ld0.master ? ld0 : level.getBlockEntity(ld0.masterPos()) instanceof LandingDoorBlockEntity mm ? mm : ld0;
+                    if (m0.ctrl != null) { sp = m0.ctrl; st.getOrCreateTag().putLong("ctrl", sp.asLong()); }
+                }
                 if (sp == null || !level.isLoaded(sp) || !(level.getBlockEntity(sp) instanceof ControllerBlockEntity c)) {
                     p.displayClientMessage(Component.translatable("elevmod.msg.select_ctrl_first").withStyle(ChatFormatting.RED), true);
                     return InteractionResult.SUCCESS;
                 }
                 if (be instanceof LandingDoorBlockEntity) {
                     if (p.isShiftKeyDown()) { c.unlinkDoor(sl, pos); p.displayClientMessage(Component.translatable("elevmod.msg.unlinked"), true); }
-                    else c.linkDoor(sl, pos, p);
+                    else {
+                        if (!(((LandingDoorBlockEntity) be).ctrl != null && sp.equals(((LandingDoorBlockEntity) be).ctrl))) c.linkDoor(sl, pos, p);
+                        // 이 문의 층을 기억: 이어서 누르는 표시기·홀랜턴·호출버튼·행선등록기는 이 층으로 연결
+                        if (level.getBlockEntity(pos) instanceof LandingDoorBlockEntity ld) {
+                            LandingDoorBlockEntity m = ld.master ? ld : level.getBlockEntity(ld.masterPos()) instanceof LandingDoorBlockEntity mm ? mm : ld;
+                            int fy = m.getBlockPos().getY();
+                            if (c.idxOfY(fy) >= 0) {
+                                st.getOrCreateTag().putInt("fy", fy);
+                                p.displayClientMessage(Component.translatable("elevmod.msg.door_floor_selected", c.floors.get(c.idxOfY(fy)).name).withStyle(ChatFormatting.AQUA), true);
+                            }
+                        }
+                    }
                 } else if (be instanceof DeviceBlockEntity d) {
                     if (p.isShiftKeyDown()) { c.devices.remove(pos); c.setChanged(); d.unlink(); p.displayClientMessage(Component.translatable("elevmod.msg.unlinked"), true); }
-                    else c.linkDevice(d, p);
+                    else {
+                        CompoundTag tg = st.getTag();
+                        int fy = tg != null && tg.contains("fy") ? tg.getInt("fy") : Integer.MIN_VALUE;
+                        c.linkDevice(d, p, fy);
+                    }
                 } else if (be instanceof MachineBlockEntity m) {
                     c.linkMachine(m, p);
                 } else return InteractionResult.PASS;
@@ -125,6 +146,7 @@ public class ElevItem extends Item {
         if (type == Type.LINKER && p.isShiftKeyDown() && stored(st) != null) {
             if (!level.isClientSide) {
                 st.removeTagKey("ctrl");
+                st.removeTagKey("fy");
                 p.displayClientMessage(Component.translatable("elevmod.msg.ctrl_cleared"), true);
             }
             return InteractionResultHolder.sidedSuccess(st, level.isClientSide);

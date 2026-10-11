@@ -82,7 +82,7 @@ public class ElevatorGameTests {
                     c.registerCarCall(lvl, 0, p);
                 })
                 .thenWaitUntil(() -> h.assertTrue(doorsOpenAt(c, 0), "1층 도착"))
-                .thenExecute(() -> h.assertTrue(c.displayDir() == -1, "목적층 없이 문 열림 정차: 마지막 방향 표시 (" + c.displayDir() + ")"))
+                .thenExecute(() -> h.assertTrue(c.displayDir() == 1, "최하층 문 열림 정차: 끝층이라 화살표가 상승으로 바뀜 (" + c.displayDir() + ")"))
                 .thenSucceed();
     }
 

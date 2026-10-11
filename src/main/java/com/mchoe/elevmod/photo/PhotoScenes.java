@@ -257,15 +257,6 @@ public final class PhotoScenes {
         SHOTS.add(new Shot("67_s2_window_half_car", x + 1.0, Y0, -sw.cd + 0.3, 0, 6, sw.getBlockPos(), 0.4f, 0));
         SHOTS.add(new Shot("68_s2_transom_offset", x + 1.0, Y0 + 0.2, -1.0, 0, -28, sw.getBlockPos(), 0f, 0));
 
-        // ---- O: 회전기로 묶어 30° 돌린 엘리베이터 (승강장 문·장치·제어반·기계·카)
-        x += 10;
-        ControllerBlockEntity rt = elevator(l, p, x, 0, 2, 4, 1, 2, false, cc -> { cc.usage = Spec.Usage.PASSENGER; cc.capIdx = 6; });
-        device(l, p, rt, ModRegistry.HALL_BUTTON.get(), x + 1, Y0 + 1, 1);
-        device(l, p, rt, ModRegistry.INDICATOR_SEGMENT.get(), x, Y0 + 2, 1);
-        com.mchoe.elevmod.network.GroupRotateMsg.apply(l, x - 2, Y0 - 3, -7, x + 2, Y0 + 20, 1, 30f, false);
-        SHOTS.add(new Shot("69_rotated_hall", x + 0.5, Y0, 4.5, 180, 10, rt.getBlockPos(), 0.5f, 0));
-        SHOTS.add(new Shot("69_rotated_top", x + 0.5, Y0 + 6, 3.5, 180, 50, rt.getBlockPos(), 0.5f, 0));
-
         // ---- N: 표시기 사용자 설정 진열 (세그먼트 종류·모양·색, 도트 크기, 애니메이션, 회전)
         {
             for (int xx = -22; xx <= 0; xx++) for (int y = Y0; y <= Y0 + 3; y++) set(l, xx, y, 44, Blocks.SMOOTH_QUARTZ.defaultBlockState());
@@ -315,6 +306,23 @@ public final class PhotoScenes {
             if (l.getBlockEntity(new BlockPos(-3, Y0 + 1, 45)) instanceof DeviceBlockEntity de) de.setYaw(25);
             for (int i = 0; i < show.length; i++)
                 SHOTS.add(new Shot("29_ind_" + i, -20 + i * 2 + 0.5, Y0 + 0.95, 46.25, 180, 0, ac, 0f, 0));
+            // 아래 줄: 세로 배치 / 번갈아 표시 / 도트 화살표 + 세그먼트 숫자 / 깜빡이는 홀랜턴
+            Object[][] row2 = {{ModRegistry.INDICATOR_DOT.get(), "vertical"}, {ModRegistry.INDICATOR_DOT.get(), "alt"},
+                    {ModRegistry.INDICATOR_SEGMENT.get(), "combo"}, {ModRegistry.HALL_LANTERN.get(), "blink"}};
+            for (int i = 0; i < row2.length; i++) {
+                int bx = -20 + i * 3;
+                device(l, p, a, (Block) row2[i][0], bx, Y0, 45);
+                if (l.getBlockEntity(new BlockPos(bx, Y0, 45)) instanceof DeviceBlockEntity de) {
+                    switch ((String) row2[i][1]) {
+                        case "vertical" -> { de.editInd("vertical", 1, ""); de.editInd("dotsize", 0, "5x7"); de.setSize(60, 220); }
+                        case "alt" -> { de.editInd("altmode", 1, ""); de.editInd("dotsize", 0, "5x7"); de.editInd("dotround", 1, ""); }
+                        case "combo" -> { de.editInd("arrowkind", 1, ""); de.editInd("arrowscale", 0, "120"); }
+                        case "blink" -> { de.editInd("lanblink", 1, ""); de.editInd("lanblinksec", 0, "0.5"); }
+                        default -> {}
+                    }
+                }
+                SHOTS.add(new Shot("29b_ind_" + row2[i][1], bx + 0.5, Y0 - 1.0, 46.6, 180, 0, ac, row2[i][1].equals("blink") ? 0.6f : 0f, 0));
+            }
             SHOTS.add(new Shot("26_ind_seg_left", -16.5, Y0 + 1.3, 47.6, 180, 6, ac, 0f, 0));
             SHOTS.add(new Shot("27_ind_dot_right", -8.0, Y0 + 1.3, 47.6, 180, 6, ac, 0f, 0));
             SHOTS.add(new Shot("28_ind_wide", -10.0, Y0 + 0.8, 50.0, 180, 4, ac, 0f, 0));

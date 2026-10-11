@@ -81,6 +81,27 @@ public final class ClientEvents {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer p = mc.player;
         if (p == null) return;
+        // 디자인 변경기(디자인 모드) + Ctrl + 우클릭: 그 표시기 하나의 개별 디자인 (승강장 표시기·홀랜턴, 카 문 위 표시기, 운전반 표시창)
+        if (p.getMainHandItem().getItem() instanceof com.mchoe.elevmod.item.DesignToolItem && !com.mchoe.elevmod.item.DesignToolItem.positionMode(p.getMainHandItem())
+                && net.minecraft.client.gui.screens.Screen.hasControlDown()) {
+            for (ElevatorCarEntity car : CARS) {
+                if (car.cCur == null || !car.contains(p, car.cCur)) continue;
+                int part = -1;
+                if (CarGeometry.lookingAtCop(car, p.getEyePosition(1f), p.getViewVector(1f), car.cCur) != 0) part = 3;
+                else if (CarGeometry.pick(car, p.getEyePosition(1f), p.getViewVector(1f), car.cCur) == com.mchoe.elevmod.elevator.CarAction.PART_INDICATOR) part = 2;
+                if (part < 0) continue;
+                mc.setScreen(com.mchoe.elevmod.client.screen.IndicatorScreen.forCar(car, part));
+                e.setCanceled(true);
+                e.setSwingHand(true);
+                return;
+            }
+            if (mc.hitResult instanceof net.minecraft.world.phys.BlockHitResult bh && bh.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK
+                    && ClientHooks.openDeviceIndicator(bh.getBlockPos())) {
+                e.setCanceled(true);
+                e.setSwingHand(true);
+                return;
+            }
+        }
         // 디자인 변경기 위치 조정 모드: 카 안 표시기(문 위)·운전반 표시창의 위치·크기 화면
         // (다른 기능과 겹치지 않도록 Ctrl 을 누른 채 우클릭할 때만)
         if (p.getMainHandItem().getItem() instanceof com.mchoe.elevmod.item.DesignToolItem && com.mchoe.elevmod.item.DesignToolItem.positionMode(p.getMainHandItem())
