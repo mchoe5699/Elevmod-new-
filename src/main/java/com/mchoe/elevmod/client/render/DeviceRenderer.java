@@ -42,7 +42,9 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
             ps.mulPose(Axis.YP.rotationDegrees(-d.yaw));
             ps.translate(0, 0, -pz);
         }
-        if (d.sizeW != 100 || d.sizeH != 100) {
+        // 층표시기는 늘린 크기만큼 표시 면적 자체를 넓힘 (도트·숫자가 찌그러지지 않게), 다른 장치는 배율로
+        boolean area = k == DeviceBlock.Kind.IND_SEGMENT || k == DeviceBlock.Kind.IND_DOT || k == DeviceBlock.Kind.IND_LCD;
+        if (!area && (d.sizeW != 100 || d.sizeH != 100)) {
             // 크기 조정: 판 가운데를 기준으로 가로·세로 배율
             float pcy = (float) (k.y1 + k.y2) / 32f;
             ps.translate(0, pcy, 0);
@@ -52,6 +54,11 @@ public class DeviceRenderer implements BlockEntityRenderer<DeviceBlockEntity> {
         float z = -0.5f + (float) k.depth / 16f + 0.0015f;
         float hw = (float) (k.x2 - k.x1) / 32f;
         float y1 = (float) k.y1 / 16f, y2 = (float) k.y2 / 16f;
+        if (area && (d.sizeW != 100 || d.sizeH != 100)) {
+            float pcy = (y1 + y2) / 2, hh = (y2 - y1) / 2 * d.sizeH / 100f;
+            hw *= d.sizeW / 100f;
+            y1 = pcy - hh; y2 = pcy + hh;
+        }
         // 커스텀 디자인(사진) 장치
         CustomDesign cdd = CustomDesigns.get(d.effectiveDesign());
         CustomDesign.PanelPart pp = cdd == null ? null : switch (k) {
