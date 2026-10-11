@@ -186,6 +186,8 @@ public class IndicatorScreen extends Screen {
                 labels.add(new Label(I18n.get("elevmod.ind.arrow_hint"), left, y + 6));
             }
             case 1 -> {
+                y = cycle(y, "ind.digits", "elevmod.ind.digits", Component.translatable("elevmod.ind.digits.n", p.digits));
+                y = cycle(y, "ind.align", "elevmod.ind.align", Component.translatable("elevmod.align." + IndicatorProfile.ALIGN[p.align]));
                 y = typed(y, "ind.dotsize", "elevmod.ind.dotsize", p.dotCols + "x" + p.dotRows, null);
                 y = cycle(y, "ind.dotround", "elevmod.ind.dotround", Component.translatable(p.dotRound ? "elevmod.dot.round" : "elevmod.dot.square"));
                 y = fontRow(y, p.dotFont);

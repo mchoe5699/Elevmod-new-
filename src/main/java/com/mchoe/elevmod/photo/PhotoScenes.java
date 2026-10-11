@@ -308,15 +308,17 @@ public final class PhotoScenes {
                 SHOTS.add(new Shot("29_ind_" + i, -20 + i * 2 + 0.5, Y0 + 0.95, 46.25, 180, 0, ac, 0f, 0));
             // 아래 줄: 세로 배치 / 번갈아 표시 / 도트 화살표 + 세그먼트 숫자 / 깜빡이는 홀랜턴
             Object[][] row2 = {{ModRegistry.INDICATOR_DOT.get(), "vertical"}, {ModRegistry.INDICATOR_DOT.get(), "alt"},
-                    {ModRegistry.INDICATOR_SEGMENT.get(), "combo"}, {ModRegistry.HALL_LANTERN.get(), "blink"}};
+                    {ModRegistry.INDICATOR_SEGMENT.get(), "combo"}, {ModRegistry.HALL_LANTERN.get(), "blink"}, {ModRegistry.INDICATOR_DOT.get(), "vertical2"}, {ModRegistry.INDICATOR_SEGMENT.get(), "seg3"}};
             for (int i = 0; i < row2.length; i++) {
                 int bx = -20 + i * 3;
                 device(l, p, a, (Block) row2[i][0], bx, Y0, 45);
                 if (l.getBlockEntity(new BlockPos(bx, Y0, 45)) instanceof DeviceBlockEntity de) {
                     switch ((String) row2[i][1]) {
                         case "vertical" -> { de.editInd("vertical", 1, ""); de.editInd("dotsize", 0, "5x7"); de.setSize(60, 220); }
+                        case "vertical2" -> { de.editInd("vertical", 1, ""); de.editInd("digits", 1, ""); de.editInd("align", 1, ""); de.setSize(60, 220); }
                         case "alt" -> { de.editInd("altmode", 1, ""); de.editInd("dotsize", 0, "5x7"); de.editInd("dotround", 1, ""); }
                         case "combo" -> { de.editInd("arrowkind", 1, ""); de.editInd("arrowscale", 0, "120"); }
+                        case "seg3" -> { de.editInd("digits", 1, ""); de.editInd("align", 1, ""); }
                         case "blink" -> { de.editInd("lanblink", 1, ""); de.editInd("lanblinksec", 0, "0.5"); }
                         default -> {}
                     }

@@ -50,6 +50,9 @@ public final class IndicatorProfile {
     public float altArrowSec = 1f, altNumSec = 1.5f, altTransSec = 0.35f;
     public int altTrans = 0, altTransDir = 1;
     // ---------------------------------------------------------------- 홀랜턴 깜빡임
+    // ---------------------------------------------------------------- 층 표시 자릿수(1~3) / 자릿수보다 짧은 층(예: 한 자리) 정렬 0 가운데 1 왼쪽 2 오른쪽
+    public static final String[] ALIGN = {"center", "left", "right"};
+    public int digits = 2, align = 0;
     public boolean lanBlink = false;
     public float lanBlinkSec = 0.5f;
 
@@ -68,6 +71,7 @@ public final class IndicatorProfile {
         t.putBoolean("vt", vertical); t.putInt("ah", arrowH); t.putInt("nk", numKind); t.putInt("ak", arrowKind);
         t.putBoolean("alt", altMode); t.putFloat("aas", altArrowSec); t.putFloat("ans", altNumSec); t.putFloat("ats", altTransSec);
         t.putInt("atr", altTrans); t.putInt("atd", altTransDir);
+        t.putInt("dg", digits); t.putInt("al", align);
         t.putBoolean("lbk", lanBlink); t.putFloat("lbs", lanBlinkSec);
         return t;
     }
@@ -96,6 +100,7 @@ public final class IndicatorProfile {
         p.altArrowSec = t.contains("aas") ? t.getFloat("aas") : 1f; p.altNumSec = t.contains("ans") ? t.getFloat("ans") : 1.5f;
         p.altTransSec = t.contains("ats") ? t.getFloat("ats") : 0.35f;
         p.altTrans = t.contains("atr") ? clamp(t.getInt("atr"), 0, TRANS.length - 1) : 0; p.altTransDir = t.contains("atd") ? clamp(t.getInt("atd"), 0, 4) : 1;
+        p.digits = t.contains("dg") ? clamp(t.getInt("dg"), 1, 3) : 2; p.align = clamp(t.getInt("al"), 0, 2);
         p.lanBlink = t.getBoolean("lbk"); p.lanBlinkSec = t.contains("lbs") ? t.getFloat("lbs") : 0.5f;
         return p;
     }
@@ -125,6 +130,8 @@ public final class IndicatorProfile {
             case "alttranssec" -> altTransSec = num(text, altTransSec, 0f, 5f);
             case "alttrans" -> altTrans = Math.floorMod(altTrans + delta, TRANS.length);
             case "alttransdir" -> altTransDir = Math.floorMod(altTransDir + delta, TRANS_DIR.length);
+            case "digits" -> digits = Math.floorMod(digits - 1 + delta, 3) + 1;
+            case "align" -> align = Math.floorMod(align + delta, ALIGN.length);
             case "lanblink" -> lanBlink = !lanBlink;
             case "lanblinksec" -> lanBlinkSec = num(text, lanBlinkSec, 0.05f, 10f);
             case "arroww" -> arrowW = (int) num(text, arrowW, 0, 60);

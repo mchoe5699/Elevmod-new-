@@ -673,5 +673,11 @@
   "elevmod.ind.title.lantern": "홀랜턴 개별 설정",
   "elevmod.ind.title.transom": "카 문 위 표시기 개별 디자인",
   "elevmod.ind.title.cop": "운전반 표시창 개별 디자인",
-  "elevmod.msg.door_floor_selected": "%s층 문 선택: 이어서 누르는 표시기·홀랜턴·호출버튼·행선등록기를 이 층에 연결합니다"
+  "elevmod.msg.door_floor_selected": "%s층 문 선택: 이어서 누르는 표시기·홀랜턴·호출버튼·행선등록기를 이 층에 연결합니다",
+  "elevmod.ind.digits": "층 표시 자릿수",
+  "elevmod.ind.digits.n": "%s자리",
+  "elevmod.ind.align": "짧은 층 정렬",
+  "elevmod.align.center": "가운데",
+  "elevmod.align.left": "맨 왼쪽",
+  "elevmod.align.right": "맨 오른쪽"
 }

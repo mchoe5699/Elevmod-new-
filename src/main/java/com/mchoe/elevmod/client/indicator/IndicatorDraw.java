@@ -133,6 +133,19 @@ public final class IndicatorDraw {
         if (prog >= 1 || st == null || st.prev.isEmpty()) { number(ps, buf, p, kind, text, num, 0, 0, null, zz, light, on, off, 1f); return; }
         int d = p.transDir == 0 ? (st.moveDir >= 0 ? 1 : 2) : p.transDir; // 1 위로 2 아래로 3 왼쪽 4 오른쪽
         String type = IndicatorProfile.TRANS[p.trans];
+        if (type.equals("scroll") && kind.equals("dot")) {
+            // 도트: 한 줄씩 밀리고, 앞 층과 다음 층 사이에 빈 도트 한 줄
+            int[] sz = dotSize(p, text.length() >= st.prev.length() ? text : st.prev);
+            boolean vert = d == 1 || d == 2;
+            int span = (vert ? sz[1] : sz[0]) + 1;
+            int k = Math.round(prog * span);
+            int sgn = d == 1 || d == 4 ? 1 : -1;     // 위로 / 오른쪽으로
+            int ox1 = vert ? 0 : sgn * k, oy1 = vert ? sgn * k : 0;
+            int ox2 = vert ? 0 : sgn * (k - span), oy2 = vert ? sgn * (k - span) : 0;
+            dotText(ps, buf, p, st.prev, num, ox1, oy1, num, zz, light, on, off, true);
+            dotText(ps, buf, p, text, num, ox2, oy2, num, zz, light, on, off, false);
+            return;
+        }
         if (type.equals("scroll") && !kind.equals("lcd")) {
             float sx = d == 3 ? -1 : d == 4 ? 1 : 0, sy = d == 1 ? 1 : d == 2 ? -1 : 0;
             number(ps, buf, p, kind, st.prev, num, sx * prog, sy * prog, num, zz, light, on, off, 1f);
@@ -180,8 +193,10 @@ public final class IndicatorDraw {
         if (font != null && !font.isFont()) font = null;
         int gc = font != null ? font.cols : p.dotCols, gr = font != null ? font.rows : p.dotRows;
         int n = Math.max(1, text.length());
-        int total = n * gc + (n - 1);
-        int ox = (cols - total) / 2, oy = (rows - Math.min(rows, gr)) / 2;
+        int slots = Math.max(n, p.digits);
+        int box = slots * gc + (slots - 1), tw = n * gc + (n - 1);
+        int bx = (cols - box) / 2;   // 자릿수 칸을 가운데에 두고 그 안에서 정렬
+        int ox = bx + switch (p.align) { case 1 -> 0; case 2 -> box - tw; default -> (box - tw) / 2; }, oy = (rows - Math.min(rows, gr)) / 2;
         for (int i = 0; i < text.length(); i++) {
             String[] bm = Glyphs.dotGlyph(text.charAt(i));
             DotAnim.Frame fg = font == null ? null : font.glyph(text.charAt(i));
@@ -230,12 +245,13 @@ public final class IndicatorDraw {
             int v;
             switch (type) {
                 case "scroll" -> {
-                    int kr = Math.round(prog * R), kc = Math.round(prog * C);
+                    // 한 줄씩 밀리고, 두 장면 사이에 빈 도트 한 줄
+                    int kr = Math.round(prog * (R + 1)), kc = Math.round(prog * (C + 1));
                     v = switch (d) {
-                        case 1 -> y + kr < R ? a.get(x, y + kr) : b.get(x, y + kr - R);          // 위로 밀려 올라감
-                        case 2 -> y - kr >= 0 ? a.get(x, y - kr) : b.get(x, y - kr + R);
-                        case 3 -> x + kc < C ? a.get(x + kc, y) : b.get(x + kc - C, y);
-                        default -> x - kc >= 0 ? a.get(x - kc, y) : b.get(x - kc + C, y);
+                        case 1 -> y + kr < R ? a.get(x, y + kr) : y + kr == R ? 0 : b.get(x, y + kr - R - 1);          // 위로 밀려 올라감
+                        case 2 -> y - kr >= 0 ? a.get(x, y - kr) : y - kr == -1 ? 0 : b.get(x, y - kr + R + 1);
+                        case 3 -> x + kc < C ? a.get(x + kc, y) : x + kc == C ? 0 : b.get(x + kc - C - 1, y);
+                        default -> x - kc >= 0 ? a.get(x - kc, y) : x - kc == -1 ? 0 : b.get(x - kc + C + 1, y);
                     };
                 }
                 case "wipe" -> {
@@ -325,13 +341,17 @@ public final class IndicatorDraw {
                                float ox, float oy, @Nullable float[] clip, float z, int light, int on, int off, float alpha) {
         float w = r[2] - r[0], h = r[3] - r[1], cx = (r[0] + r[2]) / 2 + ox * w, cy = (r[1] + r[3]) / 2 + oy * h;
         switch (kind) {
-            case "dot" -> dotText(ps, buf, p, text, r, ox, oy, clip, z, light, on, off);
+            case "dot" -> {
+                int[] sz = dotSize(p, text);
+                dotText(ps, buf, p, text, r, Math.round(ox * sz[0]), Math.round(oy * sz[1]), clip, z, light, on, off);
+            }
             case "lcd" -> {
                 int a = Math.max(8, (int) (alpha * 255));
-                RenderUtil.text(ps, buf, text, cx, cy, z + 0.0006f, h * 0.8f, (a << 24) | (on & 0xFFFFFF));
+                RenderUtil.text(ps, buf, padded(p, text), cx, cy, z + 0.0006f, h * 0.8f, (a << 24) | (on & 0xFFFFFF));
             }
             default -> {
-                String t = text.length() >= 2 ? text : " " + text;
+                // 자릿수만큼 칸(꺼진 세그먼트)을 두고, 짧은 층은 정렬 설정대로
+                String t = padded(p, text);
                 float cw = Segments.width(p.segType), gh = Math.min(h * 0.9f, w / (t.length() * cw + (t.length() - 1) * 0.2f));
                 float[] cl = clip != null ? clip : r;
                 Segments.text(ps, buf, t, p.segType, p.segShape, p.segSlant, p.segThick, cx, cy, gh, z, light, on, off, cl, p.segLead1);
@@ -339,40 +359,87 @@ public final class IndicatorDraw {
         }
     }
 
-    /** 도트 글자 (설정한 도트 크기로 5×7 글꼴을 늘려 찍음) */
-    private static void dotText(PoseStack ps, MultiBufferSource buf, IndicatorProfile p, String text, float[] r, float ox, float oy,
+    /** 자릿수에 맞춰 공백으로 채운 층 표시 (세그먼트·LCD). 자릿수보다 길면 그대로 */
+    static String padded(IndicatorProfile p, String text) {
+        int n = Math.max(p.digits, text.length()), diff = n - text.length();
+        if (diff <= 0) return text;
+        int left = switch (p.align) { case 1 -> 0; case 2 -> diff; default -> (diff + 1) / 2; };
+        return " ".repeat(left) + text + " ".repeat(diff - left);
+    }
+
+    /** 도트 글꼴 한 글자 크기 {가로, 세로} */
+    private static int[] glyphSize(IndicatorProfile p) {
+        DotAnim font = AnimLibrary.get(p.dotFont);
+        if (font != null && font.isFont()) return new int[]{font.cols, font.rows};
+        return new int[]{p.dotCols, p.dotRows};
+    }
+
+    /** 자릿수만큼의 도트 칸 크기 {가로 도트 수, 세로 도트 수} */
+    static int[] dotSize(IndicatorProfile p, String text) {
+        int[] g = glyphSize(p);
+        int n = Math.max(p.digits, Math.max(1, text.length()));
+        return new int[]{n * g[0] + (n - 1), g[1]};
+    }
+
+    /** 층 글자가 칸 안에서 시작하는 도트 열 (정렬 설정: 가운데는 도트 단위로 정확히 가운데) */
+    private static int dotStart(IndicatorProfile p, String text, int total) {
+        int[] g = glyphSize(p);
+        int n = Math.max(1, text.length());
+        int tw = n * g[0] + (n - 1), diff = total - tw;
+        if (diff <= 0) return 0;
+        return switch (p.align) { case 1 -> 0; case 2 -> diff; default -> diff / 2; };
+    }
+
+    /**
+     * 도트 글자: 자릿수(1~3)만큼의 칸에 그리고, 짧은 층은 정렬 설정대로. (shiftX, shiftY) = 도트 단위로 밀기.
+     * 칸 밖으로 밀려난 도트는 그리지 않음.
+     */
+    private static void dotText(PoseStack ps, MultiBufferSource buf, IndicatorProfile p, String text, float[] r, int shiftX, int shiftY,
                                 @Nullable float[] clip, float z, int light, int on, int off) {
-        if (text.isEmpty()) text = " ";
+        dotText(ps, buf, p, text, r, shiftX, shiftY, clip, z, light, on, off, true);
+    }
+
+    private static void dotText(PoseStack ps, MultiBufferSource buf, IndicatorProfile p, String text, float[] r, int shiftX, int shiftY,
+                                @Nullable float[] clip, float z, int light, int on, int off, boolean drawOff) {
         DotAnim font = AnimLibrary.get(p.dotFont);
         if (font != null && !font.isFont()) font = null;
-        int cols = font != null ? font.cols : p.dotCols, rows = font != null ? font.rows : p.dotRows, n = text.length();
-        int total = n * cols + (n - 1);
+        int[] gs = glyphSize(p);
+        int cols = gs[0], rows = gs[1], n = text.length();
+        int total = dotSize(p, text)[0];
         float w = r[2] - r[0], h = r[3] - r[1];
         float pitch = Math.min(w / total, h / rows);
         float gx = (r[0] + r[2]) / 2 - total * pitch / 2, gy = (r[1] + r[3]) / 2 + rows * pitch / 2;
-        // 칸 단위로 밀기 (실제 도트는 한 칸씩 움직임)
-        int sx = Math.round(ox * total), sy = Math.round(oy * rows);
+        boolean[] lit = new boolean[total * rows];
+        int[] colr = new int[total * rows];
+        int start = dotStart(p, text, total);
         for (int i = 0; i < n; i++) {
             String[] g = Glyphs.dotGlyph(text.charAt(i));
             DotAnim.Frame fg = font == null ? null : font.glyph(text.charAt(i));
             if (fg != null) { boolean any = false; for (byte b : fg.dots) if (b != 0) { any = true; break; } if (!any) fg = null; }  // 안 그린 글자는 기본 글꼴
             for (int yy = 0; yy < rows; yy++) for (int xx = 0; xx < cols; xx++) {
-                boolean lit;
+                boolean l;
                 int col = on;
                 if (fg != null) {
                     // 사용자가 직접 찍은 도트 글꼴 (1번 색 = 표시기 색, 나머지 = 글꼴 팔레트)
                     int v = font.get(fg, xx, yy);
-                    lit = v > 0;
+                    l = v > 0;
                     if (v > 1) col = font.palette[v - 1];
                 } else {
                     int fx = xx * 5 / cols, fy = yy * 7 / rows;
-                    lit = g[fy].charAt(fx) == '#';
+                    l = g[fy].charAt(fx) == '#';
                 }
-                int gxi = i * (cols + 1) + xx + sx, gyi = yy - sy;
-                if (gxi < 0 || gxi >= total || gyi < 0 || gyi >= rows) continue;
-                float cx = gx + gxi * pitch + pitch / 2, cy = gy - gyi * pitch - pitch / 2;
-                dot(ps, buf, cx, cy, pitch * 0.4f, z, lit, light, col, off, p.dotRound, clip);
+                int gxi = start + i * (cols + 1) + xx + shiftX, gyi = yy - shiftY;
+                if (!l || gxi < 0 || gxi >= total || gyi < 0 || gyi >= rows) continue;
+                lit[gyi * total + gxi] = true;
+                colr[gyi * total + gxi] = col;
             }
+        }
+        // 칸 전체 (꺼진 도트 포함) 를 그림
+        for (int y = 0; y < rows; y++) for (int x = 0; x < total; x++) {
+            boolean l = lit[y * total + x];
+            if (!l && !drawOff) continue;
+            float cx = gx + x * pitch + pitch / 2, cy = gy - y * pitch - pitch / 2;
+            dot(ps, buf, cx, cy, pitch * 0.4f, z, l, light, l ? colr[y * total + x] : on, off, p.dotRound, clip);
         }
     }
 

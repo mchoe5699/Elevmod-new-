@@ -673,5 +673,11 @@
   "elevmod.ind.title.lantern": "Hall Lantern Settings",
   "elevmod.ind.title.transom": "Car Indicator Design",
   "elevmod.ind.title.cop": "COP Display Design",
-  "elevmod.msg.door_floor_selected": "Door of floor %s selected: next devices link to this floor"
+  "elevmod.msg.door_floor_selected": "Door of floor %s selected: next devices link to this floor",
+  "elevmod.ind.digits": "Floor digits",
+  "elevmod.ind.digits.n": "%s digit(s)",
+  "elevmod.ind.align": "Short floor align",
+  "elevmod.align.center": "Center",
+  "elevmod.align.left": "Left",
+  "elevmod.align.right": "Right"
 }
